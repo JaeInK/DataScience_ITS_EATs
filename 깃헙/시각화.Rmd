@@ -1,0 +1,363 @@
+---
+title: "Untitled"
+author: "LEE EUNJI"
+date: "2019년 6월 19일"
+output: html_document
+---
+
+
+### [날짜별 주문량]  
+    
+1. 날짜, 요일, 월 변수들을 시각화하기 위한 형태로 정리
+```{r}
+setwd("C:\\Users\\EUNJI\\Desktop\\ds_yonsei\\프로젝트\\data\\real")
+its_eats <- read.csv("final_0606.csv",header = TRUE)
+library(tidyverse)
+its_eats_1 <- its_eats
+its_eats_1$day.x <- as.character(its_eats_1$day.x)
+its_eats_1$day.x <- factor(its_eats_1$day.x,
+                         levels=c("월","화","수","목","금","토","일"))
+
+calls <- its_eats_1 %>% 
+  group_by(type,date) %>% 
+  dplyr::summarise(total=sum(call))
+```
+
+### [날짜별 주문량]  
+
+1. 날짜, 요일, 월 변수들을 시각화하기 위한 **형태**로 정리  
+    = 날짜형 데이터로 변환
+```{r}
+calls$date <- paste(str_sub(calls$date,start=1,end=4),
+                    "-",
+                    str_sub(calls$date,start=5,end=6),
+                    "-",
+                    str_sub(calls$date,start=7,end=8),
+                    sep="")
+calls$date <- as.Date(calls$date)
+calls$month <- as.numeric(as.POSIXlt(calls$date)$mon+1)
+              # 월 변수 추가
+calls$monthf <- factor(calls$month,levels=as.character(1:12),
+                       labels = c("Jan","Feb","Mar","Apr",
+                                  "May","Jun","Jul","Aug",
+                                  "Sep","Oct","Nov","Dec"),
+                       ordered = TRUE) # 월 이름 추가
+```
+
+
+### [날짜별 주문량]  
+
+1. 날짜, 요일, 월 변수들을 시각화하기 위한 **형태**로 정리  
+    = 날짜형 데이터로 변환
+```{r}
+calls$weekday <- as.POSIXlt(calls$date)$wday
+calls$weekdayf <- factor(calls$weekday, levels= c(0,6,5,4,3,2,1),
+                         labels=rev(c("Mon","Tue","Wed","Thu",
+                                      "Fri","Sat","Sun")),
+                         ordered=TRUE)
+calls$yearmonth <- zoo::as.yearmon(calls$date)
+calls$yearmonthf <- factor(calls$yearmonth)
+calls$week <- as.numeric(format(as.Date(calls$date),
+                                "%W"))
+```
+
+
+
+2.날짜별 주문량 시각화
+```{r}
+library(plyr)
+calls <- ddply(calls,.(yearmonthf),transform,
+               monthweek=1+week-min(week))
+p1 <- ggplot(calls,aes(monthweek,weekdayf,fill=total)) +
+  geom_tile(colour="white") + facet_grid(type~monthf) +
+  scale_fill_gradient(low="yellow",high="red")
+```
+
+### [날짜별 주문량]  
+
+2.날짜별 주문량 시각화  
+```{r}
+p1
+```
+
+
+  - 중국집, 치킨 주문량에 비해 피자 주문량이 적음
+  - 6월 18일, 6월 24일, 9월 1일 치킨 주문량 현저히 많음
+
+
+
+### [날짜별 주문량]  
+
+3.**그래프 꾸미기...?**  
+
+```{r}
+myTheme <- theme(
+  panel.background = element_rect(fill = "white"), 
+  panel.grid.major = element_line(colour = "lightgrey"),
+  panel.grid.minor = element_line(colour = "lightgrey"),
+  strip.background = element_rect(fill = "black"),
+  strip.text = element_text(color = "white"),
+  axis.text = element_text(color = "black")
+)
+calls_cn <- calls %>% filter(type=="중국집")
+calls_ck <- calls %>% filter(type=="치킨")
+calls_pz <- calls %>% filter(type=="피자")
+```
+
+
+### [날짜별 주문량]  
+
+3.**그래프 꾸미기...?**
+
+```{r}
+p1_cn <- ggplot(calls_cn,aes(monthweek,
+                             weekdayf,fill=total)) +
+  geom_tile(colour="white") + facet_grid(.~monthf) +
+  scale_fill_gradient(low="white",high="#EA4335") +
+  labs(title = "2018년 중국집 주문 량") +
+  ylab("") + xlab("") + myTheme
+p1_ck <- ggplot(calls_ck,aes(monthweek,
+                             weekdayf,fill=total)) +
+  geom_tile(colour="white") + facet_grid(~monthf) +
+  scale_fill_gradient(low="white",high="#4285F4") +
+  labs(title = "2018년 치킨 주문 량") +
+  ylab("") + xlab("") + myTheme
+```
+
+
+### [날짜별 주문량]  
+
+3.**그래프 꾸미기...?**
+
+```{r}
+p1_pz <- ggplot(calls_pz,aes(monthweek,weekdayf,
+                             fill=total)) +
+  geom_tile(colour="white") + facet_grid(~monthf) +
+  scale_fill_gradient(low="white",high="#FBBC05")+
+  labs(title = "2018년 피자 주문 량") + 
+  ylab("") + xlab("") + myTheme
+library(gridExtra)
+```
+
+
+
+### [날짜별 주문량]  
+
+3.**그래프 꾸미기...?**  
+
+```{r}
+grid.arrange(p1_cn,p1_ck,p1_pz,ncol=1)
+```
+
+  - 중국집, 치킨, 피자 모두 주말에 주문량이 많음
+  - 12월 24일, 25일의 경우 피자 주문량 증가
+
+
+
+### [지역별, 요일별 주문량]  
+
+1. 지역, 요일별 데이터 추출  
+
+```{r}
+days <- its_eats_1 %>%
+        group_by(type, day.x,region) %>% 
+        dplyr::summarise(total=sum(call)) %>%
+        arrange(desc(total))
+days$day.x <- factor(days$day.x,
+                     levels = c("월","화","수","목","금","토","일"))
+```
+
+
+### [지역별, 요일별 주문량]  
+
+2.데이터 시각화 
+
+```{r}
+p2 <- ggplot(data = days, 
+             aes(x = day.x,
+                y = total,color=type ,group = type)) +
+  geom_line(size=1) +
+  facet_wrap(~ region) +
+  theme_bw() +
+  theme(panel.grid.minor.x = element_blank(),
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        strip.background = element_rect(fill = "steelblue"),
+        strip.text = element_text(color = "white")
+  ) +
+  scale_color_manual(values=c("#EA4335", "#4285F4", "#FBBC05"))
+```
+
+
+### [지역별, 요일별 주문량]  
+
+2.데이터 시각화 
+
+```{r}
+p2
+```
+
+  - 강남구, 강서구, 중구의 주문량 많음
+  - 광진구, 금천구, 도봉구, 양천구의 주문량 적음
+  - 피자는 모든 구에서 주문량이 가장 적음
+
+
+### [성별에 따른 주문량]  
+
+1. 성별과 주문량 데이터 추출  
+
+```{r}
+genders <- its_eats_1 %>% group_by(gender,type) %>% 
+  dplyr::summarise(total=sum(call)) %>% 
+  arrange(gender,desc(type)) 
+genders  <- ddply(genders, "gender",transform,
+                  label_ypos=cumsum(total)) 
+genders  <- ddply(genders, "gender",transform,
+                  pct=round(total/sum(total),2)*100) 
+```
+
+
+
+### [성별에 따른 주문량]  
+
+2.데이터 시각화  
+
+```{r}
+p3 <-  ggplot(genders, aes(x=gender,y=total,fill=type))+
+  geom_bar(stat="identity") + theme_bw() + 
+  scale_fill_manual(values=c("#EA4335", "#4285F4", "#FBBC05")) +
+  geom_text(aes(y=label_ypos, label=paste(pct,"%")),
+            vjust=1.6,color="white", size=5) + 
+  geom_text(aes(y=label_ypos-400000, label=paste("(",total,"건)")),
+            vjust=1.6,color="white", size=3) 
+```
+
+
+### [성별에 따른 주문량]  
+
+2.데이터 시각화  
+```{r}
+p3
+```
+
+  - 남 : 중국집 > 치킨 > 피자
+  - 여 : 치킨 > 중국집 > 피자 
+
+
+### [연령에 따른 주문량]  
+
+1. 연령별 주문량 추출
+```{r}
+ages <- its_eats_1 %>% group_by(age,type) %>% 
+  dplyr::summarise(total=sum(call)) %>% 
+  arrange(age,desc(type)) 
+ages <- ddply(ages, "age",transform,label_ypos=cumsum(total)) 
+ages <- ddply(ages, "age",transform,
+              pct=round(total/sum(total),2)*100)
+ages <- ddply(ages, "age",transform,label_ypos2 = sum(total))
+```
+
+
+### [연령에 따른 주문량]  
+
+2.데이터 시각화
+```{r}
+p4 <- ggplot(ages, aes(x=age,y=total,fill=type)) +
+            geom_bar(stat="identity") + theme_bw() + 
+  scale_fill_manual(values=c("#EA4335", "#4285F4", "#FBBC05")) +
+  geom_text(aes(y=label_ypos+50000, label=paste(pct,"%")),
+            vjust=1.6,color="white", size=5) + 
+  geom_text(aes(y=label_ypos2+300000, label=paste(label_ypos2,"건")),
+            vjust=1.6,color="black", size=4)
+```
+
+
+### [연령에 따른 주문량]  
+
+2.데이터 시각화  
+
+```{r}
+p4
+```
+
+  - 30대40대 > 50대이상 > 20대 > 10대  
+  - 10대의 치킨 주문은 10대 전체 주문량의 반 이상  
+  - 50대 이상을 제외한 모든 연령대에서 치킨 주문량이 제일 많음  
+  - 30대40대는 중국집, 치킨 주문량 비슷  
+  - 50대 이상은 중국집 주문량이 제일 많음
+
+
+### [강수량에 따른 주문량]  
+
+  - 비가 안온 날을 포함하면 mean_ganasu가 0인 쪽에 몰림  
+      -> 비가 온 날 위주로 시각화  
+
+1. 강수량, 주문량 데이터 추출 (비가 온 날)
+```{r}
+gangsus <- its_eats_1 %>% 
+  group_by(date) %>% 
+  dplyr::summarise(mean_gangsu = mean(gangsu))
+data_p5 <- its_eats_1 %>%
+  filter(gangsu>0) %>% 
+  group_by(date,type,day.x) %>% 
+  dplyr::summarise(total=sum(call))
+data_p5 <- left_join(data_p5,gangsus,by="date")
+```
+
+
+
+### [강수량에 따른 주문량]  
+2.데이터 시각화  
+```{r}
+p5 <- data_p5 %>%
+  ggplot(aes(x=mean_gangsu,y=total,color=type)) +
+  geom_point(alpha=0.5) +
+  facet_wrap(~day.x,scales = "free") +
+  scale_color_manual(values=c("#EA4335", "#4285F4", "#FBBC05")) +
+  theme_bw() + 
+  stat_smooth(method="gam",se=FALSE)+
+  theme(strip.background = element_rect(fill = "black"),
+        strip.text = element_text(color = "white"))
+```
+
+
+
+### [강수량에 따른 주문량]  
+2.데이터 시각화  
+```{r echo=FALSE}
+p5
+```
+
+
+
+### [기온에 따른 주문량]  
+
+1. 기온, 주문량 추출
+```{r}
+temperatures <- its_eats_1 %>% 
+  group_by(date,type,region) %>% 
+  dplyr::summarise(total=sum(call),temperature = mean(temperature))
+```
+
+
+### [기온에 따른 주문량]  
+
+2.데이터 시각화  
+```{r}
+p6 <-  ggplot(temperatures, aes(x=temperature,y=total,color=type)) +
+  geom_point(alpha=0.6,size=0.6) +
+  facet_wrap(~region,scales = "free") +
+  scale_color_manual(values=c("#EA4335", "#4285F4", "#FBBC05")) +
+  theme_bw() +
+  stat_smooth(method="loess",se=FALSE)+
+  theme(strip.background = element_rect(fill = "black"),
+        strip.text = element_text(color = "white"))
+```
+
+
+
+2.데이터 시각화  
+
+```{r echo=FALSE}
+p6
+```

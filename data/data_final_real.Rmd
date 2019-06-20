@@ -1,0 +1,91 @@
+---
+title: "데이터정리"
+author: "LEE EUNJI"
+date: "2019년 5월 22일"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 연령별로 합치기  
+
+  - 데이터 불러오기/factor로 변경... NA ; recorded as "" or "-" or "NA"
+```{r}
+library(tidyverse)
+data <- read.csv("data_final.csv",na.strings = c("","-","NA"),row.names = 1)
+data$month <- as.factor(data$month)
+data$date <- as.factor(data$date)
+data$rain <- as.factor(data$rain)
+data$gangsu [is.na(data$gangsu)] <- "NA"
+data$temperature[is.na(data$temperature)] <- "NA"
+data$gangsu <- as.factor(data$gangsu)
+data$temperature <- as.factor(data$temperature)
+head(data)
+```
+
+  - 10대/20대/30대40대/50대60대이상을 묶기  
+  데이터의 row 수를 줄이기 위해 비슷한 특성을 보이는 연령별로 call을 합친다. 이를 위해 age가 10대, 20대, 30대 40대, 50대 60대 이상인 row들만 추출하여 aggregate 함수를 사용한다. 
+  
+```{r}
+#10대, 20대 불러오기
+teentwenty <- data %>% 
+  filter(age=="10대"| age=="20대")
+
+#30대, 40대 합치기  
+thirtyfourty <- data %>% 
+  filter(age=="30대"| age=="40대")
+thirtyfourty_abbrev <- aggregate(call~date+day+gender+sido+region+dong+type+month+gangsu+rain+temperature,data=thirtyfourty,FUN=sum)
+thirtyfourty_abbrev$age <- "30대40대"
+
+#50대, 60대 합치기
+fiftysixty <- data %>% 
+  filter(age=="50대" | age =="60대이상") 
+fiftysixty_abbrev <- aggregate(call~date+day+gender+sido+region+dong+type+month+gangsu+rain+temperature,data=fiftysixty,FUN=sum)
+fiftysixty_abbrev$age <- "50대이상"
+```
+  
+  - age를 기준으로 row들을 합치기  
+  데이터를 합친 후, 10대/20대/30대40대/50대이상으로 잘 묶여졌는지 확인한다. 
+```{r}
+final_data <- bind_rows(teentwenty,thirtyfourty_abbrev,fiftysixty_abbrev)
+final_data$age <- as.factor(final_data$age)
+levels(final_data$age)
+head(final_data)
+```
+  
+
+## 한강 존재여부 추가하기
+  - 한강이 존재하는 지역에 대한 데이터프레임 만들기
+```{r}
+han_names <- c("암사동", "잠실동","자양동", "잠원동", "이촌동",
+               "반포동", "망원동", "여의도동", "상암동","방화동", 
+               "당산동")
+han <- matrix(c(han_names,rep(1,11)), 11,2)
+colnames(han) <- c("dong", "hangang")
+han <- data.frame(han)
+```
+
+
+  - final_data_age와 결합하기
+```{r}
+final_data_hangang <- left_join(final_data_age, han, by = "dong")
+head(final_data_hangang)
+```
+
+  - NA를 0으로 바꾸기
+```{r}
+final_data_hangang$hangang <- as.numeric(final_data_hangang[,"hangang"])
+final_data_hangang[is.na(final_data_hangang[,"hangang"]),"hangang"] <- 0 
+sum(final_data_hangang[is.na(final_data_hangang[,"hangang"]),"hangang"])
+head(final_data_hangang)
+```
+
+  
+  - 데이터 내보내기
+```{r}
+write.csv(final_data_hangang, "final_data_real.csv")
+```

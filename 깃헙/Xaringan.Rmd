@@ -1,0 +1,1811 @@
+---
+title: "ITS_EATS"
+subtitle: ""
+author: "ITS_EATS"
+institute: "RStudio, Inc."
+date: "2019/6/6"
+output:
+  xaringan::moon_reader:
+    css: [default, "my-style.css"]
+    seal: false
+    lib_dir: libs
+    nature:
+      highlightStyle: github
+      highlightLines: true
+      countIncrementalSlides: false
+editor_options: 
+  chunk_output_type: console
+---
+
+class: center, middle
+
+background-image: url(Picture1.png)
+background-position: center
+
+
+.white[
+#ITS EATS
+###소제목]
+
+---
+
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+# 목차
+
+<br><br>
+
+- 데이터 전처리 <br><br>
+- 모델링 <br><br>
+- 서비스 제안 <br><br>
+
+
+---
+class: center, middle
+
+background-image: url(Picture1.png)
+background-position: center
+
+
+.white[
+#데이터 전처리]
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+# 데이터 
+
+```{r}
+setwd("C:\\Users\\EUNJI\\Desktop\\ds_yonsei\\프로젝트\\data")
+its_eats <- read.csv("data_final.csv",
+                     na.strings = c("","-","NA"),row.names = 1)
+nrow(its_eats)
+```
+  
+--
+
+
+문제점 1. 기상 데이터에 NA값이 너무 많음
+
+--
+
+              ->자동 기상 관측 시스템 자료를 활용해서 NA 해결  
+--
+
+문제점 2. 데이터의 크기가 너무 커서 모델링을 하기에 어려움이 있을 것이라고 판단  
+
+--
+
+              ->비슷한 주문 패턴을 보이는 연령대 별로 데이터를 결합
+--
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+** 문정아 여기에 결측치 처리하는거 코드 넣어줭 **
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+# 데이터 
+ 비슷한 특성을 보이는 10대 / 20대 / 30대,40대 / 50대,60대 이상 / 으로 데이터를 ---병합  
+ 데이터 병합에는 **aggregate** 함수 사용
+ 
+```{r echo=FALSE}
+its_eats$month <- as.factor(its_eats$month)
+its_eats$date <- as.factor(its_eats$date)
+its_eats$rain <- as.factor(its_eats$rain)
+its_eats$gangsu [is.na(its_eats$gangsu)] <- "NA"
+its_eats$temperature[is.na(its_eats$temperature)] <- "NA"
+its_eats$gangsu <- as.factor(its_eats$gangsu)
+its_eats$temperature <- as.factor(its_eats$temperature)
+```
+
+```{r include=FALSE, warning=FALSE}
+library(tidyverse)
+```
+
+```{r}
+#10대, 20대 불러오기
+teentwenty <- its_eats %>% 
+  filter(age=="10대"| age=="20대")
+```
+
+```{r warning=FALSE}
+#30대, 40대 합치기  
+thirtyfourty <- its_eats %>% 
+  filter(age=="30대"| age=="40대")
+thirtyfourty_abbrev <- aggregate(call~date+day+gender+sido+region+
+                                      dong+type+month+gangsu+rain+
+                                      temperature,data=thirtyfourty,
+                                      FUN=sum)
+thirtyfourty_abbrev$age <- "30대40대"
+```
+
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+# 데이터 
+ 비슷한 특성을 보이는 10대 / 20대 / 30대,40대 / 50대,60대 이상 / 으로 데이터를 ---병합  
+ 데이터 병합에는 **aggregate** 함수 사용
+
+```{r warning=FALSE}
+#50대, 60대 합치기
+fiftysixty <- its_eats %>% 
+  filter(age=="50대" | age =="60대이상") 
+fiftysixty_abbrev <- aggregate(call~date+day+gender+sido+region+
+                                    dong+type+month+gangsu+rain+
+                                    temperature,data=fiftysixty,
+                                    FUN=sum)
+fiftysixty_abbrev$age <- "50대이상"
+```
+
+---
+
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+# 데이터
+
+
+```{r warning=FALSE}
+its_eats <- bind_rows(teentwenty,thirtyfourty_abbrev,
+                      fiftysixty_abbrev)
+its_eats$age <- as.factor(its_eats$age)
+levels(its_eats$age)
+nrow(its_eats)
+```
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+# 데이터  
+  한강, 공휴일, 스포츠 경기 여부 등의 변수 추가
+
+**여기에 한강,공휴일, 스포츠 경기 붙이는 코드 추가?**
+**head 하면 너무 조잡하게 나오는데 어떻게 해야할지 모르겠어ㅠㅠ**
+  
+```{r}
+setwd("C:\\Users\\EUNJI\\Desktop\\ds_yonsei\\프로젝트\\data\\real")
+its_eats <- read.csv("final_0606.csv", header = TRUE)
+its_eats <- its_eats[,-1]
+knitr::kable(head(its_eats),format = "html")
+```
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+##데이터 - 변수 설명 
+
+.pull-left[
+| 변수명 | 내용 |
+|-------------|:----------:|
+| date      | 주문 날짜 |
+| day       | 주문 요일 |
+| gender    | 성별 |
+| age       | 연령 |
+| region        | 구(지역)      |    
+| dong          | 동(지역)      |  
+| type          | 배달 음식 종류|    ]
+
+.pull-right[
+| 변수명 | 내용 |
+|-------------|:----------:|
+| call          | 배달 건수     |  
+| month         | 월            |  
+| hangang       | 한강이 있는지 여부 |
+| gangsu        | 일 평균 강수량 |  
+| rain          | 강수 여부 |  
+| temperature   | 일 평균 기온 |  
+| hoilday_name  | 휴일 이름 |  
+| holiday       | 휴일 여부 |  
+| KBO           | 야구 경기 여부 |  
+| soccer        | 축구 경기 여부 |  ]
+
+---
+class: center, middle
+
+background-image: url(Picture1.png)
+background-position: center
+
+
+.white[
+#데이터 시각화]
+
+---
+
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### [날짜별 주문량]  
+**api 키 받았는데 권한이 없다고 해서 상완오빠가 보내준 시각화 코드가 안돌아ㅠㅠ**
+  - 모든 날짜의 주문량을 시각화하면 주문량이 예외적으로 많은 날,
+    전반적인 경향 등을 파악할 수 있음
+    
+1. 날짜, 요일, 월 변수들을 시각화하기 위한 **형태**로 정리
+```{r}
+its_eats_1 <- its_eats
+its_eats_1$day.x <- as.character(its_eats_1$day.x)
+its_eats_1$day.x <- factor(its_eats_1$day.x,
+                         levels=c("월","화","수","목","금","토","일"))
+
+calls <- its_eats_1 %>% 
+  group_by(type,date) %>% 
+  dplyr::summarise(total=sum(call))
+```
+
+---
+
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### [날짜별 주문량]  
+
+1. 날짜, 요일, 월 변수들을 시각화하기 위한 **형태**로 정리  
+    = 날짜형 데이터로 변환
+```{r}
+calls$date <- paste(str_sub(calls$date,start=1,end=4),
+                    "-",
+                    str_sub(calls$date,start=5,end=6),
+                    "-",
+                    str_sub(calls$date,start=7,end=8),
+                    sep="")
+calls$date <- as.Date(calls$date)
+calls$month <- as.numeric(as.POSIXlt(calls$date)$mon+1)
+              # 월 변수 추가
+calls$monthf <- factor(calls$month,levels=as.character(1:12),
+                       labels = c("Jan","Feb","Mar","Apr",
+                                  "May","Jun","Jul","Aug",
+                                  "Sep","Oct","Nov","Dec"),
+                       ordered = TRUE) # 월 이름 추가
+```
+
+---
+
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### [날짜별 주문량]  
+
+1. 날짜, 요일, 월 변수들을 시각화하기 위한 **형태**로 정리  
+    = 날짜형 데이터로 변환
+```{r}
+calls$weekday <- as.POSIXlt(calls$date)$wday
+calls$weekdayf <- factor(calls$weekday, levels= c(0,6,5,4,3,2,1),
+                         labels=rev(c("Mon","Tue","Wed","Thu",
+                                      "Fri","Sat","Sun")),
+                         ordered=TRUE)
+calls$yearmonth <- zoo::as.yearmon(calls$date)
+calls$yearmonthf <- factor(calls$yearmonth)
+calls$week <- as.numeric(format(as.Date(calls$date),
+                                "%W"))
+```
+
+
+---
+
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### [날짜별 주문량]  
+
+2.날짜별 주문량 시각화
+```{r message=FALSE}
+library(plyr)
+calls <- ddply(calls,.(yearmonthf),transform,
+               monthweek=1+week-min(week))
+p1 <- ggplot(calls,aes(monthweek,weekdayf,fill=total)) +
+  geom_tile(colour="white") + facet_grid(type~monthf) +
+  scale_fill_gradient(low="yellow",high="red")
+```
+
+---
+
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### [날짜별 주문량]  
+
+2.날짜별 주문량 시각화  
+```{r echo=FALSE}
+p1
+```
+
+
+  - 중국집, 치킨 주문량에 비해 피자 주문량이 적음
+  - 6월 18일, 6월 24일, 9월 1일 치킨 주문량 현저히 많음
+
+---
+
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### [날짜별 주문량]  
+
+3.**그래프 꾸미기...?**  
+
+```{r}
+myTheme <- theme(
+  panel.background = element_rect(fill = "white"), 
+  panel.grid.major = element_line(colour = "lightgrey"),
+  panel.grid.minor = element_line(colour = "lightgrey"),
+  strip.background = element_rect(fill = "black"),
+  strip.text = element_text(color = "white"),
+  axis.text = element_text(color = "black")
+)
+calls_cn <- calls %>% filter(type=="중국집")
+calls_ck <- calls %>% filter(type=="치킨")
+calls_pz <- calls %>% filter(type=="피자")
+```
+
+---
+
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### [날짜별 주문량]  
+
+3.**그래프 꾸미기...?**
+
+```{r}
+p1_cn <- ggplot(calls_cn,aes(monthweek,
+                             weekdayf,fill=total)) +
+  geom_tile(colour="white") + facet_grid(.~monthf) +
+  scale_fill_gradient(low="white",high="#EA4335") +
+  labs(title = "2018년 중국집 주문 량") +
+  ylab("") + xlab("") + myTheme
+p1_ck <- ggplot(calls_ck,aes(monthweek,
+                             weekdayf,fill=total)) +
+  geom_tile(colour="white") + facet_grid(~monthf) +
+  scale_fill_gradient(low="white",high="#4285F4") +
+  labs(title = "2018년 치킨 주문 량") +
+  ylab("") + xlab("") + myTheme
+```
+---
+
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### [날짜별 주문량]  
+
+3.**그래프 꾸미기...?**
+
+```{r message=FALSE}
+p1_pz <- ggplot(calls_pz,aes(monthweek,weekdayf,
+                             fill=total)) +
+  geom_tile(colour="white") + facet_grid(~monthf) +
+  scale_fill_gradient(low="white",high="#FBBC05")+
+  labs(title = "2018년 피자 주문 량") + 
+  ylab("") + xlab("") + myTheme
+library(gridExtra)
+```
+
+---
+
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### [날짜별 주문량]  
+
+3.**그래프 꾸미기...?**  
+
+```{r echo=FALSE}
+grid.arrange(p1_cn,p1_ck,p1_pz,ncol=1)
+```
+
+  - 중국집, 치킨, 피자 모두 주말에 주문량이 많음
+  - 12월 24일, 25일의 경우 피자 주문량 증가
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### [지역별, 요일별 주문량]  
+
+1. 지역, 요일별 데이터 추출  
+
+```{r}
+days <- its_eats_1 %>%
+        group_by(type, day.x,region) %>% 
+        dplyr::summarise(total=sum(call)) %>%
+        arrange(desc(total))
+days$day.x <- factor(days$day.x,
+                     levels = c("월","화","수","목","금","토","일"))
+```
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### [지역별, 요일별 주문량]  
+
+2.데이터 시각화 
+
+```{r}
+p2 <- ggplot(data = days, 
+             aes(x = day.x,
+                y = total,color=type ,group = type)) +
+  geom_line(size=1) +
+  facet_wrap(~ region) +
+  theme_bw() +
+  theme(panel.grid.minor.x = element_blank(),
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        strip.background = element_rect(fill = "steelblue"),
+        strip.text = element_text(color = "white")
+  ) +
+  scale_color_manual(values=c("#EA4335", "#4285F4", "#FBBC05"))
+```
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### [지역별, 요일별 주문량]  
+
+2.데이터 시각화 
+
+```{r echo=FALSE}
+p2
+```
+
+  - 강남구, 강서구, 중구의 주문량 많음
+  - 광진구, 금천구, 도봉구, 양천구의 주문량 적음
+  - 피자는 모든 구에서 주문량이 가장 적음
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### [성별에 따른 주문량]  
+
+1. 성별과 주문량 데이터 추출  
+
+```{r}
+genders <- its_eats_1 %>% group_by(gender,type) %>% 
+  dplyr::summarise(total=sum(call)) %>% 
+  arrange(gender,desc(type)) 
+genders  <- ddply(genders, "gender",transform,
+                  label_ypos=cumsum(total)) 
+genders  <- ddply(genders, "gender",transform,
+                  pct=round(total/sum(total),2)*100) 
+```
+
+
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### [성별에 따른 주문량]  
+
+2.데이터 시각화  
+
+```{r}
+p3 <-  ggplot(genders, aes(x=gender,y=total,fill=type))+
+  geom_bar(stat="identity") + theme_bw() + 
+  scale_fill_manual(values=c("#EA4335", "#4285F4", "#FBBC05")) +
+  geom_text(aes(y=label_ypos, label=paste(pct,"%")),
+            vjust=1.6,color="white", size=5) + 
+  geom_text(aes(y=label_ypos-400000, label=paste("(",total,"건)")),
+            vjust=1.6,color="white", size=3) 
+```
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### [성별에 따른 주문량]  
+
+2.데이터 시각화  
+```{r echo=FALSE}
+p3
+```
+
+  - 남 : 중국집 > 치킨 > 피자
+  - 여 : 치킨 > 중국집 > 피자 
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### [연령에 따른 주문량]  
+
+1. 연령별 주문량 추출
+```{r}
+ages <- its_eats_1 %>% group_by(age,type) %>% 
+  dplyr::summarise(total=sum(call)) %>% 
+  arrange(age,desc(type)) 
+ages <- ddply(ages, "age",transform,label_ypos=cumsum(total)) 
+ages <- ddply(ages, "age",transform,
+              pct=round(total/sum(total),2)*100)
+ages <- ddply(ages, "age",transform,label_ypos2 = sum(total))
+```
+
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### [연령에 따른 주문량]  
+
+2.데이터 시각화
+```{r}
+p4 <- ggplot(ages, aes(x=age,y=total,fill=type)) +
+            geom_bar(stat="identity") + theme_bw() + 
+  scale_fill_manual(values=c("#EA4335", "#4285F4", "#FBBC05")) +
+  geom_text(aes(y=label_ypos+50000, label=paste(pct,"%")),
+            vjust=1.6,color="white", size=5) + 
+  geom_text(aes(y=label_ypos2+300000, label=paste(label_ypos2,"건")),
+            vjust=1.6,color="black", size=4)
+```
+
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### [연령에 따른 주문량]  
+
+2.데이터 시각화  
+
+```{r echo=FALSE}
+p4
+```
+
+  - 30대40대 > 50대이상 > 20대 > 10대  
+  - 10대의 치킨 주문은 10대 전체 주문량의 반 이상  
+  - 50대 이상을 제외한 모든 연령대에서 치킨 주문량이 제일 많음  
+  - 30대40대는 중국집, 치킨 주문량 비슷  
+  - 50대 이상은 중국집 주문량이 제일 많음
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### [강수량에 따른 주문량]  
+
+  - 비가 안온 날을 포함하면 mean_ganasu가 0인 쪽에 몰림  
+      -> 비가 온 날 위주로 시각화  
+
+1. 강수량, 주문량 데이터 추출 (비가 온 날)
+```{r}
+gangsus <- its_eats_1 %>% 
+  group_by(date) %>% 
+  dplyr::summarise(mean_gangsu = mean(gangsu))
+data_p5 <- its_eats_1 %>%
+  filter(gangsu>0) %>% 
+  group_by(date,type,day.x) %>% 
+  dplyr::summarise(total=sum(call))
+data_p5 <- left_join(data_p5,gangsus,by="date")
+```
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### [강수량에 따른 주문량]  
+2.데이터 시각화  
+```{r}
+p5 <- data_p5 %>%
+  ggplot(aes(x=mean_gangsu,y=total,color=type)) +
+  geom_point(alpha=0.5) +
+  facet_wrap(~day.x,scales = "free") +
+  scale_color_manual(values=c("#EA4335", "#4285F4", "#FBBC05")) +
+  theme_bw() + 
+  stat_smooth(method="gam",se=FALSE)+
+  theme(strip.background = element_rect(fill = "black"),
+        strip.text = element_text(color = "white"))
+```
+
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### [강수량에 따른 주문량]  
+2.데이터 시각화  
+```{r echo=FALSE}
+p5
+```
+
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### [기온에 따른 주문량]  
+
+1. 기온, 주문량 추출
+```{r}
+temperatures <- its_eats_1 %>% 
+  group_by(date,type,region) %>% 
+  dplyr::summarise(total=sum(call),temperature = mean(temperature))
+```
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### [기온에 따른 주문량]  
+
+2.데이터 시각화  
+```{r}
+p6 <-  ggplot(temperatures, aes(x=temperature,y=total,color=type)) +
+  geom_point(alpha=0.6,size=0.6) +
+  facet_wrap(~region,scales = "free") +
+  scale_color_manual(values=c("#EA4335", "#4285F4", "#FBBC05")) +
+  theme_bw() +
+  stat_smooth(method="loess",se=FALSE)+
+  theme(strip.background = element_rect(fill = "black"),
+        strip.text = element_text(color = "white"))
+```
+
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### [기온에 따른 주문량]  
+
+2.데이터 시각화  
+
+```{r echo=FALSE}
+p6
+```
+
+---
+
+---
+class: center, middle
+
+background-image: url(Picture1.png)
+background-position: center
+
+
+.white[
+#모델링  
+  - 시계열 모형  
+  - Decision Tree  
+  - Xgboost]
+
+
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### 1. 시계열 모형  
+  - 구별, 배달 음식 종류별로 구분하여 각각의 시계열 모형 추정  
+  - 시간의 흐름과 관련이 없는 gender, age, dong, hangang은 설명변수에서 제외  
+  
+#### [중국집 배달량 구별로 시계열 모형 만들기]  
+
+  1.구 이름 데이터 프레임 만들기
+
+```{r echo=FALSE}
+setwd("C:\\Users\\EUNJI\\Desktop\\ds_yonsei\\프로젝트\\data\\real")
+its_eats <- read.csv("final_0606.csv",header = TRUE)      
+```
+
+```{r}
+gu_names <- its_eats %>%
+  select(region)
+gu_names <- unique(gu_names)
+rownames(gu_names) <- NULL
+```
+  
+  
+  2.구별로 데이터를 할당하는데 필요한 변수들 정리  
+  
+```{r}
+tsdata_chinese_names <- c()
+calls_chinese_names <- c()
+auto_names <- c()
+fit_names <- c()
+pred_names <- c()
+```
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### 1. 시계열 모형
+#### [중국집 배달량 구별로 시계열 모형 만들기] 
+
+  3.type이 중국집인 시계열 데이터를 구별로 정리  
+  
+```{r}
+for (i in 1:25) {
+  assign(paste0("tsdata_chinese_",i),
+         unique(its_eats %>%
+           filter(type == "중국집" & region == gu_names[i,1]) %>%
+           select(date, gangsu, rain, temperature, holiday.y, KBO, soccer)))
+  assign(paste0("calls_chinese_",i),
+        its_eats %>%
+           filter(type == "중국집" & region == gu_names[i,1]) %>%
+           select(date, call) %>%
+           group_by(date) %>%
+           summarise(calls = sum(call)))  
+  tsdata_chinese_names[i] <- paste0("tsdata_chinese_",i)
+  calls_chinese_names[i] <- paste0("calls_chinese_",i)
+  auto_names[i] <- paste0("auto_",i)
+  fit_names[i] <- paste0("fit_",i)
+  pred_names[i] <- paste0("pred_",i)
+  assign(paste0("tsdata_chinese_",i) ,
+         ts(cbind(get(calls_chinese_names[i]),
+                  get(tsdata_chinese_names[i]))))}
+```
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### 1. 시계열 모형
+#### [중국집 배달량 구별로 시계열 모형 만들기] 
+
+  4.모델링  
+
+```{r warning=FALSE}
+library(forecast)
+covariate <- c("gangsu","rain","temperature","holiday.y","KBO","soccer")
+for (i in 1:25) {
+  assign(paste0("auto_",i),
+        auto.arima(get(tsdata_chinese_names[i])[,"calls"], #<<
+                    xreg = get(tsdata_chinese_names[i])[,covariate])) #<<
+  ord = get(auto_names[1])$arma[c(1,6,2)] #<<
+  assign(paste0("fit_",i), 
+         arima(get(tsdata_chinese_names[i])[,"calls"],
+               xreg = get(tsdata_chinese_names[i])[,covariate],
+               order = ord, seasonal = list(order=c(0,0,1), period =7)))} #<<
+```
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### 1. 시계열 모형
+#### [중국집 배달량 구별로 시계열 모형 만들기]  
+   
+   5. 예측과 비교 그래프 그리기 
+```{r eval=FALSE}
+for (i in 1:25) {
+  assign(paste0("pred_",i),
+         forecast(get(fit_names[i]),
+                  xreg = get(tsdata_chinese_names[i])[,covariate]))}
+par(mfrow=c(5,5))
+par(mar=c(1,1,1,1))
+for (i in 1:25) {
+  plot(get(tsdata_chinese_names[i])[,"calls"], main = gu_names[i,1])
+  lines(fitted(get(pred_names[i])), col = "skyblue")}
+```
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### 1. 시계열 모형
+#### [중국집 배달량 구별로 시계열 모형 만들기]   
+   
+   5.예측과 비교 그래프 그리기 
+```{r echo=FALSE}
+for (i in 1:25) {
+  assign(paste0("pred_",i),
+         forecast(get(fit_names[i]),
+                  xreg = get(tsdata_chinese_names[i])[,covariate]))}
+par(mfrow=c(5,5))
+par(mar=c(1,1,1,1))
+for (i in 1:25) {
+  plot(get(tsdata_chinese_names[i])[,"calls"], main = gu_names[i,1])
+  lines(fitted(get(pred_names[i])), col = "skyblue")}
+```
+
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### 1. 시계열 모형
+#### [치킨 배달량 구별로 시계열 모형 만들기] 
+
+```{r echo=FALSE, warning=FALSE}
+tsdata_chicken_names <- c()
+calls_chicken_names <- c()
+auto_names <- c()
+fit_names <- c()
+pred_names <- c()
+for (i in 1:25) {
+  assign(paste0("tsdata_chicken_",i),
+         unique(its_eats %>%
+           filter(type == "치킨" & region == gu_names[i,1]) %>%
+           select(date, gangsu, rain, temperature, holiday.y, KBO, soccer)
+        ))
+  assign(paste0("calls_chicken_",i),
+        its_eats %>%
+           filter(type == "치킨" & region == gu_names[i,1]) %>%
+           select(date, call) %>%
+           group_by(date) %>%
+           summarise(calls = sum(call)))  
+  tsdata_chicken_names[i] <- paste0("tsdata_chicken_",i)
+  calls_chicken_names[i] <- paste0("calls_chicken_",i)
+  auto_names[i] <- paste0("auto_",i)
+  fit_names[i] <- paste0("fit_",i)
+  pred_names[i] <- paste0("pred_",i)
+  assign(paste0("tsdata_chicken_",i) ,
+         ts(left_join(get(calls_chicken_names[i]), get(tsdata_chicken_names[i]), by = "date")))
+}
+
+## 모델링 loop
+library(forecast)
+covariate <- c("gangsu","rain","temperature","holiday.y","KBO","soccer")
+for (i in 1:25) {
+  assign(paste0("auto_",i),
+         auto.arima(get(tsdata_chicken_names[i])[,"calls"],
+                    xreg = get(tsdata_chicken_names[i])[,covariate]))
+  ord = get(auto_names[1])$arma[c(1,6,2)]
+  assign(paste0("fit_",i), 
+         arima(get(tsdata_chicken_names[i])[,"calls"],
+               xreg = get(tsdata_chicken_names[i])[,covariate],
+               order = ord, seasonal = list(order=c(0,0,1), period =7)))
+}
+
+# 예측
+for (i in 1:25) {
+  assign(paste0("pred_",i),
+         forecast(get(fit_names[i]), xreg = get(tsdata_chicken_names[i])[,covariate]))
+}
+par(mfrow=c(5,5))
+par(mar=c(1,1,1,1))
+for (i in 1:25) {
+  plot(get(tsdata_chicken_names[i])[,"calls"], main = gu_names[i,1])
+  lines(fitted(get(pred_names[i])), col = "pink")
+  }
+```
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### 1. 시계열 모형
+#### [피자 배달량 구별로 시계열 모형 만들기] 
+
+```{r echo=FALSE, warning=FALSE}
+tsdata_pizza_names <- c()
+calls_pizza_names <- c()
+auto_names <- c()
+fit_names <- c()
+pred_names <- c()
+for (i in 1:25) {
+  assign(paste0("tsdata_pizza_",i),
+         unique(its_eats %>%
+           filter(type == "치킨" & region == gu_names[i,1]) %>%
+           select(date, gangsu, rain, temperature, holiday.y, KBO, soccer)
+        ))
+  assign(paste0("calls_pizza_",i),
+        its_eats %>%
+           filter(type == "치킨" & region == gu_names[i,1]) %>%
+           select(date, call) %>%
+           group_by(date) %>%
+           summarise(calls = sum(call)))  
+  tsdata_pizza_names[i] <- paste0("tsdata_pizza_",i)
+  calls_pizza_names[i] <- paste0("calls_pizza_",i)
+  auto_names[i] <- paste0("auto_",i)
+  fit_names[i] <- paste0("fit_",i)
+  pred_names[i] <- paste0("pred_",i)
+  assign(paste0("tsdata_pizza_",i) ,
+         ts(left_join(get(calls_pizza_names[i]), get(tsdata_pizza_names[i]), by = "date")))
+}
+
+## 모델링 loop
+library(forecast)
+covariate <- c("gangsu","rain","temperature","holiday.y","KBO","soccer")
+for (i in 1:25) {
+  assign(paste0("auto_",i),
+         auto.arima(get(tsdata_pizza_names[i])[,"calls"],
+                    xreg = get(tsdata_pizza_names[i])[,covariate]))
+  ord = get(auto_names[1])$arma[c(1,6,2)]
+  assign(paste0("fit_",i), 
+         arima(get(tsdata_pizza_names[i])[,"calls"],
+               xreg = get(tsdata_pizza_names[i])[,covariate],
+               order = ord, seasonal = list(order=c(0,0,1), period =7)))
+}
+
+# 예측
+for (i in 1:25) {
+  assign(paste0("pred_",i),
+         forecast(get(fit_names[i]), xreg = get(tsdata_pizza_names[i])[,covariate]))
+}
+par(mfrow=c(5,5))
+par(mar=c(1,1,1,1))
+for (i in 1:25) {
+  plot(get(tsdata_pizza_names[i])[,"calls"], main = gu_names[i,1])
+  lines(fitted(get(pred_names[i])), col = "light green")
+  }
+```
+
+---
+
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### 1. 시계열 모형  
+
+  - 전반적으로 원래의 데이터와 예측 데이터가 많이 겹쳐짐
+  - 중국집 : 광진구, 도봉구, 성동구
+  - 치킨 : 용산구, 종로구
+  - 피자 : 마포구
+  - 예측이 잘 안되는 경우가 있음
+  
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### 2. Decision Tree
+  디시즌 트리 할거면 여기에..?
+
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### 3. XGboost  
+#### [ 중국집 배달 건수를 모델링 ]   
+
+  - XGboost 모델에서 hyper parameter를 특정하기 전,  
+    train set과 test set을 나누어 모델링 진행
+  - depth = 6, eta = 0.3
+  
+1. 모델링에 필요한 자료 정리   
+  
+```{r warning=FALSE, message=FALSE}
+chinese <- its_eats %>% filter(type=="중국집")
+# one hot 인코딩
+library(Matrix)                                              
+sparse_matrix_chinese <- sparse.model.matrix(call ~                                                  -1+day.x+gender+age+dong+gangsu+rain+temperature+
+      holiday.y+KBO+soccer, data = chinese)
+output_vector_chinese <- chinese$call
+```
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### 3. XGboost  
+#### [ 중국집 배달 건수를 모델링 ]  
+
+  2.모델링  
+  
+```{r message=FALSE, warning=FALSE}
+library(xgboost)
+xgb_chinese <- xgboost(data = sparse_matrix_chinese,
+                       label = output_vector_chinese,
+                       max_depth = 6,
+                       eta = 0.3,
+                       nthread = 3,
+                       nrounds = 500,
+                       objective = "count:poisson")
+```  
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### 3. XGboost  
+#### [ 중국집 배달 건수를 모델링 ]  
+
+  2.모델링  
+```{r}
+importance_chinese <- xgb.importance(
+            feature_names = colnames(sparse_matrix_chinese),
+            model = xgb_chinese)
+head(importance_chinese)
+```
+
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### 3. XGboost  
+#### [ 중국집 배달 건수를 모델링 ]  
+
+  2.모델링
+```{r echo=FALSE}
+xgb.plot.importance(importance_matrix = importance_chinese,
+                    top_n=15)
+```
+  
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### 3. XGboost  
+#### [ 치킨 배달 건수를 모델링 ]  
+  - XGboost 모델에서 hyper parameter를 특정하기 전,  
+    train set과 test set을 나누어 모델링 진행
+  - depth = 7, eta = 0.4  
+  
+1.모델링에 필요한 자료 정리
+
+```{r warning=FALSE, message=FALSE}
+chicken <- its_eats %>% filter(type=="치킨")
+# one hot 인코딩
+library(Matrix)                                              
+sparse_matrix_chicken <- sparse.model.matrix(call ~                                                                               -1+day.x+gender+age+dong+gangsu+rain+
+                                  temperature+holiday.y+KBO+soccer,
+                                  data = chicken)
+output_vector_chicken <- chicken$call
+```
+
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### 3. XGboost  
+#### [ 치킨 배달 건수를 모델링 ]  
+
+  2.모델링  
+```{r message=FALSE, warning=FALSE}
+library(xgboost)
+xgb_chicken <- xgboost(data = sparse_matrix_chicken,
+                       label = output_vector_chicken,
+                       max_depth = 7,
+                       eta = 0.4,
+                       nthread = 3,
+                       nrounds = 500,
+                       objective = "count:poisson")
+```  
+
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### 3. XGboost  
+#### [ 치킨 배달 건수를 모델링 ]  
+
+  2.모델링
+```{r}
+importance_chicken <- xgb.importance(
+                  feature_names = colnames(sparse_matrix_chicken),
+                  model = xgb_chicken)
+head(importance_chicken)
+```
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### 3. XGboost  
+#### [ 치킨 배달 건수를 모델링 ]  
+
+  2.모델링  
+  
+```{r echo=FALSE}  
+xgb.plot.importance(importance_matrix = importance_chicken,
+                    top_n=15)
+```
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### 3. XGboost  
+#### [ 피자 배달 건수를 모델링 ]  
+
+  - XGboost 모델에서 hyper parameter를 특정하기 전,  
+    train set과 test set을 나누어 모델링 진행
+  - depth = 6, eta = 0.4
+  
+1.모델링에 필요한 자료 정리
+
+```{r warning=FALSE, message=FALSE}
+pizza <- its_eats %>% filter(type=="피자")
+# one hot 인코딩
+library(Matrix)                                              
+sparse_matrix_pizza <- sparse.model.matrix(call ~                                                                               -1+day.x+gender+age+dong+gangsu+rain+
+                                  temperature+holiday.y+KBO+soccer,
+                                  data = pizza)
+output_vector_pizza <- pizza$call
+```
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### 3. XGboost  
+#### [ 피자 배달 건수를 모델링 ]  
+  
+  2.모델링
+```{r message=FALSE, warning=FALSE}
+library(xgboost)
+xgb_pizza <- xgboost(data = sparse_matrix_pizza,
+                       label = output_vector_pizza,
+                       max_depth = 6,
+                       eta = 0.4,
+                       nthread = 3,
+                       nrounds = 500,
+                       objective = "count:poisson")
+```
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### 3. XGboost  
+#### [ 피자 배달 건수를 모델링 ]   
+  
+  2.모델링
+```{r}
+importance_pizza <- xgb.importance(
+                  feature_names = colnames(sparse_matrix_pizza),
+                  model = xgb_pizza)
+head(importance_pizza)
+```
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### 3. XGboost  
+#### [ 피자 배달 건수를 모델링 ]   
+  
+  2.모델링  
+  
+```{r echo=FALSE}  
+xgb.plot.importance(importance_matrix = importance_pizza,
+                    top_n=15)
+```  
+  
+---
+class: center, middle
+
+background-image: url(Picture1.png)
+background-position: center
+
+
+.white[
+#감사합니다]
+
+---
+한글 폰트??
+전에 Sample rmd나 배달_모델비교.r에 기록햇던거
+
+background-image: url(https://upload.wikimedia.org/wikipedia/commons/b/be/Sharingan_triple.svg)
+
+```{r setup, include=FALSE}
+options(htmltools.dir.version = FALSE)
+```
+
+???
+
+Image credit: [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Sharingan_triple.svg)
+
+---
+class: center, middle
+
+# xaringan
+
+### /ʃaː.'riŋ.ɡan/
+
+---
+class: inverse, center, middle
+
+# Get Started
+
+---
+
+# Hello World
+
+Install the **xaringan** package from [Github](https://github.com/yihui/xaringan):
+
+```{r eval=FALSE, tidy=FALSE}
+devtools::install_github("yihui/xaringan")
+```
+
+--
+
+You are recommended to use the [RStudio IDE](https://www.rstudio.com/products/rstudio/), but you do not have to.
+
+- Create a new R Markdown document from the menu `File -> New File -> R Markdown -> From Template -> Ninja Presentation`;<sup>1</sup>
+
+--
+
+- Click the `Knit` button to compile it;
+
+--
+
+- or use the [RStudio Addin](https://rstudio.github.io/rstudioaddins/)<sup>2</sup> "Infinite Moon Reader" to live preview the slides (every time you update and save the Rmd document, the slides will be automatically reloaded in RStudio Viewer.
+
+.footnote[
+[1] 中文用户请看[这份教程](http://slides.yihui.name/xaringan/zh-CN.html)
+
+[2] See [#2](https://github.com/yihui/xaringan/issues/2) if you do not see the template or addin in RStudio.
+]
+
+---
+background-image: url(`r xaringan:::karl`)
+background-position: 50% 50%
+class: center, bottom, inverse
+
+# You only live once!
+
+---
+
+# Hello Ninja
+
+As a presentation ninja, you certainly should not be satisfied by the "Hello World" example. You need to understand more about two things:
+
+1. The [remark.js](https://remarkjs.com) library;
+
+1. The **xaringan** package;
+
+Basically **xaringan** injected the chakra of R Markdown (minus Pandoc) into **remark.js**. The slides are rendered by remark.js in the web browser, and the Markdown source needed by remark.js is generated from R Markdown (**knitr**).
+
+---
+
+# remark.js
+
+You can see an introduction of remark.js from [its homepage](https://remarkjs.com). You should read the [remark.js Wiki](https://github.com/gnab/remark/wiki) at least once to know how to
+
+- create a new slide (Markdown syntax<sup>*</sup> and slide properties);
+
+- format a slide (e.g. text alignment);
+
+- configure the slideshow;
+
+- and use the presentation (keyboard shortcuts).
+
+It is important to be familiar with remark.js before you can understand the options in **xaringan**.
+
+.footnote[[*] It is different with Pandoc's Markdown! It is limited but should be enough for presentation purposes. Come on... You do not need a slide for the Table of Contents! Well, the Markdown support in remark.js [may be improved](https://github.com/gnab/remark/issues/142) in the future.]
+
+---
+background-image: url(`r xaringan:::karl`)
+background-size: cover
+class: center, bottom, inverse
+
+# I was so happy to have discovered remark.js!
+
+---
+class: inverse, middle, center
+
+# Using xaringan
+
+---
+
+# xaringan
+
+Provides an R Markdown output format `xaringan::moon_reader` as a wrapper for remark.js, and you can use it in the YAML metadata, e.g.
+
+```yaml
+---
+title: "A Cool Presentation"
+output:
+  xaringan::moon_reader:
+    yolo: true
+    nature:
+      autoplay: 30000
+---
+```
+
+See the help page `?xaringan::moon_reader` for all possible options that you can use.
+
+---
+
+# remark.js vs xaringan
+
+Some differences between using remark.js (left) and using **xaringan** (right):
+
+.pull-left[
+1. Start with a boilerplate HTML file;
+
+1. Plain Markdown;
+
+1. Write JavaScript to autoplay slides;
+
+1. Manually configure MathJax;
+
+1. Highlight code with `*`;
+
+1. Edit Markdown source and refresh browser to see updated slides;
+]
+
+.pull-right[
+1. Start with an R Markdown document;
+
+1. R Markdown (can embed R/other code chunks);
+
+1. Provide an option `autoplay`;
+
+1. MathJax just works;<sup>*</sup>
+
+1. Highlight code with `{{}}`;
+
+1. The RStudio addin "Infinite Moon Reader" automatically refreshes slides on changes;
+]
+
+.footnote[[*] Not really. See next page.]
+
+---
+
+# Math Expressions
+
+You can write LaTeX math expressions inside a pair of dollar signs, e.g. &#36;\alpha+\beta$ renders $\alpha+\beta$. You can use the display style with double dollar signs:
+
+```
+$$\bar{X}=\frac{1}{n}\sum_{i=1}^nX_i$$
+```
+
+$$\bar{X}=\frac{1}{n}\sum_{i=1}^nX_i$$
+
+Limitations:
+
+1. The source code of a LaTeX math expression must be in one line, unless it is inside a pair of double dollar signs, in which case the starting `$$` must appear in the very beginning of a line, followed immediately by a non-space character, and the ending `$$` must be at the end of a line, led by a non-space character;
+
+1. There should not be spaces after the opening `$` or before the closing `$`.
+
+1. Math does not work on the title slide (see [#61](https://github.com/yihui/xaringan/issues/61) for a workaround).
+
+---
+
+
+
+# Tables
+
+If you want to generate a table, make sure it is in the HTML format (instead of Markdown or other formats), e.g.,
+
+```{r}
+knitr::kable(head(iris), format = 'html')
+```
+
+---
+
+# HTML Widgets
+
+I have not thoroughly tested HTML widgets against **xaringan**. Some may work well, and some may not. It is a little tricky.
+
+Similarly, the Shiny mode (`runtime: shiny`) does not work. I might get these issues fixed in the future, but these are not of high priority to me. I never turn my presentation into a Shiny app. When I need to demonstrate more complicated examples, I just launch them separately. It is convenient to share slides with other people when they are plain HTML/JS applications.
+
+See the next page for two HTML widgets.
+
+---
+
+```{r out.width='100%', fig.height=6, eval=require('leaflet')}
+library(leaflet)
+leaflet() %>% addTiles() %>% setView(-93.65, 42.0285, zoom = 17)
+```
+
+---
+
+```{r eval=require('DT'), tidy=FALSE}
+DT::datatable(
+  head(iris, 10),
+  fillContainer = FALSE, options = list(pageLength = 8)
+)
+```
+
+---
+
+# Some Tips
+
+- When you use the "Infinite Moon Reader" addin in RStudio, your R session will be blocked by default. You can click the red button on the right of the console to stop serving the slides, or use the _daemonized_ mode so that it does not block your R session. To do the latter, you can set the option
+
+    ```r
+    options(servr.daemon = TRUE)
+    ```
+    
+    in your current R session, or in `~/.Rprofile` so that it is applied to all future R sessions. I do the latter by myself.
+    
+    To know more about the web server, see the [**servr**](https://github.com/yihui/servr) package.
+
+--
+
+- Do not forget to try the `yolo` option of `xaringan::moon_reader`.
+
+    ```yaml
+    output:
+      xaringan::moon_reader:
+        yolo: true
+    ```
+
+---
+
+# Some Tips
+
+- Slides can be automatically played if you set the `autoplay` option under `nature`, e.g. go to the next slide every 30 seconds in a lightning talk:
+
+    ```yaml
+    output:
+      xaringan::moon_reader:
+        nature:
+          autoplay: 30000
+    ```
+
+--
+
+- A countdown timer can be added to every page of the slides using the `countdown` option under `nature`, e.g. if you want to spend one minute on every page when you give the talk, you can set:
+
+    ```yaml
+    output:
+      xaringan::moon_reader:
+        nature:
+          countdown: 60000
+    ```
+
+    Then you will see a timer counting down from `01:00`, to `00:59`, `00:58`, ... When the time is out, the timer will continue but the time turns red.
+    
+---
+
+# Some Tips
+
+- The title slide is created automatically by **xaringan**, but it is just another remark.js slide added before your other slides.
+
+    The title slide is set to `class: center, middle, inverse, title-slide` by default. You can change the classes applied to the title slide with the `titleSlideClass` option of `nature` (`title-slide` is always applied).
+
+    ```yaml
+    output:
+      xaringan::moon_reader:
+        nature:
+          titleSlideClass: [top, left, inverse]
+    ```
+    
+--
+
+- If you'd like to create your own title slide, disable **xaringan**'s title slide with the `seal = FALSE` option of `moon_reader`.
+
+    ```yaml
+    output:
+      xaringan::moon_reader:
+        seal: false
+    ```
+
+---
+
+# Some Tips
+
+- There are several ways to build incremental slides. See [this presentation](https://slides.yihui.name/xaringan/incremental.html) for examples.
+
+- The option `highlightLines: true` of `nature` will highlight code lines that start with `*`, or are wrapped in `{{ }}`, or have trailing comments `#<<`;
+
+    ```yaml
+    output:
+      xaringan::moon_reader:
+        nature:
+          highlightLines: true
+    ```
+
+    See examples on the next page.
+
+---
+
+# Some Tips
+
+
+.pull-left[
+An example using a leading `*`:
+
+    ```r
+    if (TRUE) {
+    ** message("Very important!")
+    }
+    ```
+Output:
+```r
+if (TRUE) {
+* message("Very important!")
+}
+```
+
+This is invalid R code, so it is a plain fenced code block that is not executed.
+]
+
+.pull-right[
+An example using `{{}}`:
+
+````
+`r ''````{r tidy=FALSE}
+if (TRUE) {
+*{{ message("Very important!") }}
+}
+```
+````
+Output:
+```{r tidy=FALSE}
+if (TRUE) {
+{{ message("Very important!") }}
+}
+```
+
+It is valid R code so you can run it. Note that `{{}}` can wrap an R expression of multiple lines.
+]
+
+---
+
+# Some Tips
+
+An example of using the trailing comment `#<<` to highlight lines:
+
+````markdown
+`r ''````{r tidy=FALSE}
+library(ggplot2)
+ggplot(mtcars) + 
+  aes(mpg, disp) + 
+  geom_point() +   #<<
+  geom_smooth()    #<<
+```
+````
+
+Output:
+
+```{r tidy=FALSE, eval=FALSE}
+library(ggplot2)
+ggplot(mtcars) + 
+  aes(mpg, disp) + 
+  geom_point() +   #<<
+  geom_smooth()    #<<
+```
+
+---
+
+# Some Tips
+
+When you enable line-highlighting, you can also use the chunk option `highlight.output` to highlight specific lines of the text output from a code chunk. For example, `highlight.output = TRUE` means highlighting all lines, and `highlight.output = c(1, 3)` means highlighting the first and third line.
+
+````md
+`r ''````{r, highlight.output=c(1, 3)}
+head(iris)
+```
+````
+
+```{r, highlight.output=c(1, 3), echo=FALSE}
+head(iris)
+```
+
+Question: what does `highlight.output = c(TRUE, FALSE)` mean? (Hint: think about R's recycling of vectors)
+
+---
+
+# Some Tips
+
+- To make slides work offline, you need to download a copy of remark.js in advance, because **xaringan** uses the online version by default (see the help page `?xaringan::moon_reader`).
+
+- You can use `xaringan::summon_remark()` to download the latest or a specified version of remark.js. By default, it is downloaded to `libs/remark-latest.min.js`.
+
+- Then change the `chakra` option in YAML to point to this file, e.g.
+
+    ```yaml
+    output:
+      xaringan::moon_reader:
+        chakra: libs/remark-latest.min.js
+    ```
+
+- If you used Google fonts in slides (the default theme uses _Yanone Kaffeesatz_, _Droid Serif_, and _Source Code Pro_), they won't work offline unless you download or install them locally. The Heroku app [google-webfonts-helper](https://google-webfonts-helper.herokuapp.com/fonts) can help you download fonts and generate the necessary CSS.
+
+---
+
+# Macros
+
+- remark.js [allows users to define custom macros](https://github.com/yihui/xaringan/issues/80) (JS functions) that can be applied to Markdown text using the syntax `![:macroName arg1, arg2, ...]` or `![:macroName arg1, arg2, ...](this)`. For example, before remark.js initializes the slides, you can define a macro named `scale`:
+
+    ```js
+    remark.macros.scale = function (percentage) {
+      var url = this;
+      return '<img src="' + url + '" style="width: ' + percentage + '" />';
+    };
+    ```
+
+    Then the Markdown text
+
+    ```markdown
+    ![:scale 50%](image.jpg)
+    ```
+
+    will be translated to
+    
+    ```html
+    <img src="image.jpg" style="width: 50%" />
+    ```
+
+---
+
+# Macros (continued)
+
+- To insert macros in **xaringan** slides, you can use the option `beforeInit` under the option `nature`, e.g.,
+
+    ```yaml
+    output:
+      xaringan::moon_reader:
+        nature:
+          beforeInit: "macros.js"
+    ```
+
+    You save your remark.js macros in the file `macros.js`.
+
+- The `beforeInit` option can be used to insert arbitrary JS code before `remark.create()`. Inserting macros is just one of its possible applications.
+
+---
+
+# CSS
+
+Among all options in `xaringan::moon_reader`, the most challenging but perhaps also the most rewarding one is `css`, because it allows you to customize the appearance of your slides using any CSS rules or hacks you know.
+
+You can see the default CSS file [here](https://github.com/yihui/xaringan/blob/master/inst/rmarkdown/templates/xaringan/resources/default.css). You can completely replace it with your own CSS files, or define new rules to override the default. See the help page `?xaringan::moon_reader` for more information.
+
+---
+
+# CSS
+
+For example, suppose you want to change the font for code from the default "Source Code Pro" to "Ubuntu Mono". You can create a CSS file named, say, `ubuntu-mono.css`:
+
+```css
+@import url(https://fonts.googleapis.com/css?family=Ubuntu+Mono:400,700,400italic);
+
+.remark-code, .remark-inline-code { font-family: 'Ubuntu Mono'; }
+```
+
+Then set the `css` option in the YAML metadata:
+
+```yaml
+output:
+  xaringan::moon_reader:
+    css: ["default", "ubuntu-mono.css"]
+```
+
+Here I assume `ubuntu-mono.css` is under the same directory as your Rmd.
+
+See [yihui/xaringan#83](https://github.com/yihui/xaringan/issues/83) for an example of using the [Fira Code](https://github.com/tonsky/FiraCode) font, which supports ligatures in program code.
+
+---
+
+# Themes
+
+Don't want to learn CSS? Okay, you can use some user-contributed themes. A theme typically consists of two CSS files `foo.css` and `foo-fonts.css`, where `foo` is the theme name. Below are some existing themes:
+
+```{r}
+names(xaringan:::list_css())
+```
+
+---
+
+# Themes
+
+To use a theme, you can specify the `css` option as an array of CSS filenames (without the `.css` extensions), e.g.,
+
+```yaml
+output:
+  xaringan::moon_reader:
+    css: [default, metropolis, metropolis-fonts]
+```
+
+If you want to contribute a theme to **xaringan**, please read [this blog post](https://yihui.name/en/2017/10/xaringan-themes).
+
+---
+class: inverse, middle, center
+background-image: url(https://upload.wikimedia.org/wikipedia/commons/3/39/Naruto_Shiki_Fujin.svg)
+background-size: contain
+
+# Naruto
+
+---
+background-image: url(https://upload.wikimedia.org/wikipedia/commons/b/be/Sharingan_triple.svg)
+background-size: 100px
+background-position: 90% 8%
+
+# Sharingan
+
+The R package name **xaringan** was derived<sup>1</sup> from **Sharingan**, a dōjutsu in the Japanese anime _Naruto_ with two abilities:
+
+- the "Eye of Insight"
+
+- the "Eye of Hypnotism"
+
+I think a presentation is basically a way to communicate insights to the audience, and a great presentation may even "hypnotize" the audience.<sup>2,3</sup>
+
+.footnote[
+[1] In Chinese, the pronounciation of _X_ is _Sh_ /ʃ/ (as in _shrimp_). Now you should have a better idea of how to pronounce my last name _Xie_.
+
+[2] By comparison, bad presentations only put the audience to sleep.
+
+[3] Personally I find that setting background images for slides is a killer feature of remark.js. It is an effective way to bring visual impact into your presentations.
+]
+
+---
+
+# Naruto terminology
+
+The **xaringan** package borrowed a few terms from Naruto, such as
+
+- [Sharingan](http://naruto.wikia.com/wiki/Sharingan) (写輪眼; the package name)
+
+- The [moon reader](http://naruto.wikia.com/wiki/Moon_Reader) (月読; an attractive R Markdown output format)
+
+- [Chakra](http://naruto.wikia.com/wiki/Chakra) (查克拉; the path to the remark.js library, which is the power to drive the presentation)
+
+- [Nature transformation](http://naruto.wikia.com/wiki/Nature_Transformation) (性質変化; transform the chakra by setting different options)
+
+- The [infinite moon reader](http://naruto.wikia.com/wiki/Infinite_Tsukuyomi) (無限月読; start a local web server to continuously serve your slides)
+
+- The [summoning technique](http://naruto.wikia.com/wiki/Summoning_Technique) (download remark.js from the web)
+
+You can click the links to know more about them if you want. The jutsu "Moon Reader" may seem a little evil, but that does not mean your slides are evil.
+
+---
+
+class: center
+
+# Hand seals (印)
+
+Press `h` or `?` to see the possible ninjutsu you can use in remark.js.
+
+![](https://upload.wikimedia.org/wikipedia/commons/7/7e/Mudra-Naruto-KageBunshin.svg)
+
+---
+
+class: center, middle
+
+# Thanks!
+
+Slides created via the R package [**xaringan**](https://github.com/yihui/xaringan).
+
+The chakra comes from [remark.js](https://remarkjs.com), [**knitr**](http://yihui.name/knitr), and [R Markdown](https://rmarkdown.rstudio.com).

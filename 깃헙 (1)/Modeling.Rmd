@@ -1,0 +1,159 @@
+---
+title: "Untitled"
+author: "LEE EUNJI"
+date: "2019년 6월 6일"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 데이터 불러오기
+
+```{r warning=FALSE}
+setwd("C:\\Users\\EUNJI\\Desktop\\ds_yonsei\\프로젝트\\data\\real")
+final <- read.csv("final_0606.csv", header = TRUE)
+final <- final[,-1]
+library(tidyverse)
+```
+
+## type이 중국집인 경우만 모델링
+# 중국집 데이터 정리 (train과 test셋 나누기)
+``` {r}
+chinese <- final %>% filter(type=="중국집")
+idx_chinese <- sample(1:nrow(chinese),nrow(chinese)*0.7)
+train.df_chinese <- chinese[idx_chinese,]
+test.df_chinese <- chinese[-idx_chinese,]
+```
+
+# one hot 인코딩
+```{R warning = FALSE}
+library(Matrix)                                              
+sparse_matrix_train_chinese <- sparse.model.matrix(call ~                                                  -1+day.x+gender+age+dong+gangsu+rain+temperature+holiday.y+KBO+soccer,                                            data = train.df_chinese)
+sparse_matrix_test_chinese  <- sparse.model.matrix(call ~ -1+day.x+gender+age+dong+gangsu+rain+temperature+holiday.y+KBO+soccer,
+                                           data = test.df_chinese)
+output_vector_chinese <- train.df_chinese$call
+```
+
+# xgboost
+```{r results = FALSE, warning=FALSE}
+library(xgboost)
+xgb_chinese <- xgboost(data = sparse_matrix_train_chinese,
+                       label = output_vector_chinese,
+                       max_depth = 6,
+                       eta = 0.3,
+                       nthread = 3,
+                       nrounds = 500,
+                       objective = "count:poisson")
+```
+
+```{r}
+importance_chinese <- xgb.importance(feature_names = colnames(sparse_matrix_train_chinese), model = xgb_chinese)
+head(importance_chinese)
+xgb.plot.importance(importance_matrix = importance_chinese,top_n=15)
+```
+
+
+# 예측
+```{r}
+pred_chinese <- predict(xgb_chinese, sparse_matrix_test_chinese)
+obs_chinese <- test.df_chinese[,"call"]
+caret::MAE(pred_chinese,obs_chinese)
+caret::RMSE(pred_chinese,obs_chinese)
+```
+
+## type이 치킨인 경우만 모델링
+# 치킨 데이터 정리 (train과 test셋 나누기)
+``` {r}
+chicken <- final %>% filter(type=="치킨")
+idx_chicken <- sample(1:nrow(chicken),nrow(chicken)*0.7)
+train.df_chicken <- chicken[idx_chicken,]
+test.df_chicken <- chicken[-idx_chicken,]
+```
+
+# one hot 인코딩
+```{R}
+library(Matrix)                                              
+sparse_matrix_train_chicken <- sparse.model.matrix(call ~                                                  -1+day.x+gender+age+dong+gangsu+rain+temperature+holiday.y+KBO+soccer,                                            data = train.df_chicken)
+sparse_matrix_test_chicken  <- sparse.model.matrix(call ~ -1+day.x+gender+age+dong+gangsu+rain+temperature+holiday.y+KBO+soccer,
+                                           data = test.df_chicken)
+output_vector_chicken <- train.df_chicken$call
+```
+
+# xgboost
+```{r results=FALSE}
+library(xgboost)
+xgb_chicken <- xgboost(data = sparse_matrix_train_chicken,
+                       label = output_vector_chicken,
+                       max_depth = 6,
+                       eta = 0.3,
+                       nthread = 3,
+                       nrounds = 500,
+                       objective = "count:poisson")
+```
+
+```{r}
+importance_chicken <- xgb.importance(feature_names = colnames(sparse_matrix_train_chicken), model = xgb_chicken)
+head(importance_chicken)
+xgb.plot.importance(importance_matrix = importance_chicken,top_n=15)
+```
+
+
+# 예측
+```{r}
+pred_chicken <- predict(xgb_chicken, sparse_matrix_test_chicken)
+obs_chicken <- test.df_chicken[,"call"]
+caret::MAE(pred_chicken,obs_chicken)
+caret::RMSE(pred_chicken,obs_chicken)
+```
+
+
+
+## type이 피자인 경우만 모델링
+# 피자 데이터 정리 (train과 test셋 나누기)
+``` {r}
+pizza <- final %>% filter(type=="피자")
+idx_pizza <- sample(1:nrow(pizza),nrow(pizza)*0.7)
+train.df_pizza <- pizza[idx_pizza,]
+test.df_pizza <- pizza[-idx_pizza,]
+```
+
+# one hot 인코딩
+```{R}
+library(Matrix)                                              
+sparse_matrix_train_pizza <- sparse.model.matrix(call ~                                                  -1+day.x+gender+age+dong+gangsu+rain+temperature+holiday.y+KBO+soccer,                                            data = train.df_pizza)
+sparse_matrix_test_pizza  <- sparse.model.matrix(call ~ -1+day.x+gender+age+dong+gangsu+rain+temperature+holiday.y+KBO+soccer,
+                                           data = test.df_pizza)
+output_vector_pizza <- train.df_pizza$call
+```
+
+# xgboost
+```{r results=FALSE}
+library(xgboost)
+xgb_pizza <- xgboost(data = sparse_matrix_train_pizza,
+                       label = output_vector_pizza,
+                       max_depth = 6,
+                       eta = 0.3,
+                       nthread = 3,
+                       nrounds = 500,
+                       objective = "count:poisson")
+```
+
+```{r}
+importance_pizza <- xgb.importance(feature_names = colnames(sparse_matrix_train_pizza), model = xgb_pizza)
+head(importance_pizza)
+xgb.plot.importance(importance_matrix = importance_pizza,top_n=15)
+```
+
+
+# 예측
+```{r}
+pred_pizza <- predict(xgb_pizza, sparse_matrix_test_pizza)
+obs_pizza <- test.df_pizza[,"call"]
+caret::MAE(pred_pizza,obs_pizza)
+caret::RMSE(pred_pizza,obs_pizza)
+```
+

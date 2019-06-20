@@ -1,0 +1,343 @@
+---
+title: "ITS_EATS"
+subtitle: ""
+author: "ITS_EATS"
+institute: "RStudio, Inc."
+date: "2019/6/6" 
+output:
+  xaringan::moon_reader:
+    css: [default, "my-style.css"]
+    seal: false
+    lib_dir: libs
+    nature:
+      highlightStyle: github
+      highlightLines: true
+      countIncrementalSlides: false
+editor_options: 
+  chunk_output_type: console
+---
+
+class: center, middle
+
+background-image: url(Picture1.png)
+background-position: center
+
+
+.white[
+#모델링  
+  - 시계열 모형  
+  - Decision Tree  
+  - Xgboost]
+
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### 1. 시계열 모형  
+  - 구별, 배달 음식 종류별로 구분하여 각각의 시계열 모형 추정  
+  - 시간의 흐름과 관련이 없는 gender, age, dong, hangang은 설명변수에서 제외  
+  
+#### [중국집 배달량 구별로 시계열 모형 만들기]  
+
+  1.구 이름 데이터 프레임 만들기
+
+```{r include=FALSE}
+setwd("C:\\Users\\EUNJI\\Desktop\\ds_yonsei\\프로젝트\\data\\real")
+its_eats <- read.csv("final_0606.csv",header = TRUE)      
+library(tidyverse)
+```
+
+```{r}
+gu_names <- its_eats %>%
+  select(region)
+gu_names <- unique(gu_names)
+rownames(gu_names) <- NULL
+```
+  
+  
+  2.구별로 데이터를 할당하는데 필요한 변수들 정리  
+  
+```{r}
+tsdata_chinese_names <- c()
+calls_chinese_names <- c()
+auto_names <- c()
+fit_names <- c()
+pred_names <- c()
+```
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### 1. 시계열 모형
+#### [중국집 배달량 구별로 시계열 모형 만들기] 
+
+  3.type이 중국집인 시계열 데이터를 구별로 정리  
+  
+```{r}
+for (i in 1:25) {
+  assign(paste0("tsdata_chinese_",i),
+         unique(its_eats %>%
+           filter(type == "중국집" & region == gu_names[i,1]) %>%
+           select(date, gangsu, rain, temperature, holiday.y, KBO, soccer)))
+  assign(paste0("calls_chinese_",i),
+        its_eats %>%
+           filter(type == "중국집" & region == gu_names[i,1]) %>%
+           select(date, call) %>%
+           group_by(date) %>%
+           summarise(calls = sum(call)))  
+  tsdata_chinese_names[i] <- paste0("tsdata_chinese_",i)
+  calls_chinese_names[i] <- paste0("calls_chinese_",i)
+  auto_names[i] <- paste0("auto_",i)
+  fit_names[i] <- paste0("fit_",i)
+  pred_names[i] <- paste0("pred_",i)
+  assign(paste0("tsdata_chinese_",i) ,
+         ts(left_join(get(calls_chinese_names[i]),
+                      get(tsdata_chinese_names[i]),
+                      by = "date")))}
+```
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### 1. 시계열 모형
+#### [중국집 배달량 구별로 시계열 모형 만들기] 
+
+  4.모델링  
+
+```{r warning=FALSE}
+library(forecast)
+covariate <- c("gangsu","rain","temperature","holiday.y","KBO","soccer")
+for (i in 1:25) {
+  assign(paste0("auto_",i),
+        auto.arima(get(tsdata_chinese_names[i])[,"calls"], #<<
+                    xreg = get(tsdata_chinese_names[i])[,covariate])) #<<
+  ord = get(auto_names[1])$arma[c(1,6,2)] #<<
+  assign(paste0("fit_",i), 
+         arima(get(tsdata_chinese_names[i])[,"calls"],
+               xreg = get(tsdata_chinese_names[i])[,covariate],
+               order = ord, seasonal = list(order=c(0,0,1), period =7)))} #<<
+```
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### 1. 시계열 모형
+#### [중국집 배달량 구별로 시계열 모형 만들기]  
+   
+   5. 예측과 비교 그래프 그리기 
+```{r eval=FALSE}
+for (i in 1:25) {
+  assign(paste0("pred_",i),
+         forecast(get(fit_names[i]),
+                  xreg = get(tsdata_chinese_names[i])[,covariate]))}
+par(mfrow=c(5,5))
+par(mar=c(1,1,1,1))
+for (i in 1:25) {
+  plot(get(tsdata_chinese_names[i])[,"calls"], main = gu_names[i,1])
+  lines(fitted(get(pred_names[i])), col = "skyblue")}
+```
+
+---
+   
+   5. 예측과 비교 그래프 그리기 
+```{r echo=FALSE}
+for (i in 1:25) {
+  assign(paste0("pred_",i),
+         forecast(get(fit_names[i]),
+                  xreg = get(tsdata_chinese_names[i])[,covariate]))}
+par(mfrow=c(5,5))
+par(mar=c(1,1,1,1))
+for (i in 1:25) {
+  plot(get(tsdata_chinese_names[i])[,"calls"], main = gu_names[i,1])
+  lines(fitted(get(pred_names[i])), col = "skyblue")}
+```
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+```{r}
+pre_chinese <- gu_names
+for (i in 1:25) {
+pre_chinese[i,2] <- caret::RMSE(get(pred_names[i])$fitted,
+                                get(tsdata_chinese_names[i])[,"calls"])
+pre_chinese[i,3] <- caret::MAE(get(pred_names[i])$fitted,
+                                get(tsdata_chinese_names[i])[,"calls"])
+colnames(pre_chinese) <- c("구","MSE","MAE")
+}
+```
+
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+   
+   
+```{r echo=FALSE}
+pre_chinese
+```
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### 1. 시계열 모형
+#### [치킨 배달량 구별로 시계열 모형 만들기] 
+
+```{r echo=FALSE, warning=FALSE}
+tsdata_chicken_names <- c()
+calls_chicken_names <- c()
+auto_names <- c()
+fit_names <- c()
+pred_names <- c()
+for (i in 1:25) {
+  assign(paste0("tsdata_chicken_",i),
+         unique(its_eats %>%
+           filter(type == "치킨" & region == gu_names[i,1]) %>%
+           select(date, gangsu, rain, temperature, holiday.y, KBO, soccer)
+        ))
+  assign(paste0("calls_chicken_",i),
+        its_eats %>%
+           filter(type == "치킨" & region == gu_names[i,1]) %>%
+           select(date, call) %>%
+           group_by(date) %>%
+           summarise(calls = sum(call)))  
+  tsdata_chicken_names[i] <- paste0("tsdata_chicken_",i)
+  calls_chicken_names[i] <- paste0("calls_chicken_",i)
+  auto_names[i] <- paste0("auto_",i)
+  fit_names[i] <- paste0("fit_",i)
+  pred_names[i] <- paste0("pred_",i)
+  assign(paste0("tsdata_chicken_",i) ,
+         ts(left_join(get(calls_chicken_names[i]), get(tsdata_chicken_names[i]), by = "date")))
+}
+
+## 모델링 loop
+library(forecast)
+covariate <- c("gangsu","rain","temperature","holiday.y","KBO","soccer")
+for (i in 1:25) {
+  assign(paste0("auto_",i),
+         auto.arima(get(tsdata_chicken_names[i])[,"calls"],
+                    xreg = get(tsdata_chicken_names[i])[,covariate]))
+  ord = get(auto_names[1])$arma[c(1,6,2)]
+  assign(paste0("fit_",i), 
+         arima(get(tsdata_chicken_names[i])[,"calls"],
+               xreg = get(tsdata_chicken_names[i])[,covariate],
+               order = ord, seasonal = list(order=c(0,0,1), period =7)))
+}
+
+# 예측
+for (i in 1:25) {
+  assign(paste0("pred_",i),
+         forecast(get(fit_names[i]), xreg = get(tsdata_chicken_names[i])[,covariate]))
+}
+par(mfrow=c(5,5))
+par(mar=c(1,1,1,1))
+for (i in 1:25) {
+  plot(get(tsdata_chicken_names[i])[,"calls"], main = gu_names[i,1])
+  lines(fitted(get(pred_names[i])), col = "pink")
+  }
+```
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+```{r echo=FALSE}
+pre_chicken <- gu_names
+for (i in 1:25) {
+pre_chicken[i,2] <- caret::RMSE(get(pred_names[i])$fitted,
+                                get(tsdata_chicken_names[i])[,"calls"])
+pre_chicken[i,3] <- caret::MAE(get(pred_names[i])$fitted,
+                                get(tsdata_chicken_names[i])[,"calls"])
+}
+colnames(pre_chicken) <- c("구","MSE","MAE")
+pre_chicken
+```
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### 1. 시계열 모형
+#### [피자 배달량 구별로 시계열 모형 만들기] 
+
+```{r echo=FALSE, warning=FALSE}
+tsdata_pizza_names <- c()
+calls_pizza_names <- c()
+auto_names <- c()
+fit_names <- c()
+pred_names <- c()
+for (i in 1:25) {
+  assign(paste0("tsdata_pizza_",i),
+         unique(its_eats %>%
+           filter(type == "피자" & region == gu_names[i,1]) %>%
+           select(date, gangsu, rain, temperature, holiday.y, KBO, soccer)
+        ))
+  assign(paste0("calls_pizza_",i),
+        its_eats %>%
+           filter(type == "피자" & region == gu_names[i,1]) %>%
+           select(date, call) %>%
+           group_by(date) %>%
+           summarise(calls = sum(call)))  
+  tsdata_pizza_names[i] <- paste0("tsdata_pizza_",i)
+  calls_pizza_names[i] <- paste0("calls_pizza_",i)
+  auto_names[i] <- paste0("auto_",i)
+  fit_names[i] <- paste0("fit_",i)
+  pred_names[i] <- paste0("pred_",i)
+  assign(paste0("tsdata_pizza_",i) ,
+         ts(left_join(get(calls_pizza_names[i]), get(tsdata_pizza_names[i]), by = "date")))
+}
+
+## 모델링 loop
+library(forecast)
+covariate <- c("gangsu","rain","temperature","holiday.y","KBO","soccer")
+for (i in 1:25) {
+  assign(paste0("auto_",i),
+         auto.arima(get(tsdata_pizza_names[i])[,"calls"],
+                    xreg = get(tsdata_pizza_names[i])[,covariate]))
+  ord = get(auto_names[1])$arma[c(1,6,2)]
+  assign(paste0("fit_",i), 
+         arima(get(tsdata_pizza_names[i])[,"calls"],
+               xreg = get(tsdata_pizza_names[i])[,covariate],
+               order = ord, seasonal = list(order=c(0,0,1), period =7)))
+}
+
+# 예측
+for (i in 1:25) {
+  assign(paste0("pred_",i),
+         forecast(get(fit_names[i]), xreg = get(tsdata_pizza_names[i])[,covariate]))
+}
+par(mfrow=c(5,5))
+par(mar=c(1,1,1,1))
+for (i in 1:25) {
+  plot(get(tsdata_pizza_names[i])[,"calls"], main = gu_names[i,1])
+  lines(fitted(get(pred_names[i])), col = "light green")
+  }
+```
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+```{r echo=FALSE}
+pre_pizza <- gu_names
+for (i in 1:25) {
+pre_pizza[i,2] <- caret::RMSE(get(pred_names[i])$fitted,
+                                get(tsdata_pizza_names[i])[,"calls"])
+pre_pizza[i,3] <- caret::MAE(get(pred_names[i])$fitted,
+                                get(tsdata_pizza_names[i])[,"calls"])}
+colnames(pre_pizza) <- c("구","MSE","MAE")
+pre_pizza
+```
