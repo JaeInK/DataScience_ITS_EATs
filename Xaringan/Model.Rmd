@@ -1,0 +1,760 @@
+---
+title: "ITS_EATS"
+subtitle: ""
+author: "ITS_EATS"
+institute: "RStudio, Inc."
+date: "2019/6/6" 
+output:
+  xaringan::moon_reader:
+    css: [default, "my-style.css"]
+    seal: false
+    lib_dir: libs
+    nature:
+      highlightStyle: github
+      highlightLines: true
+      countIncrementalSlides: false
+editor_options: 
+  chunk_output_type: console
+---
+
+class: center, middle
+
+background-image: url(Picture1.png)
+background-position: center
+
+
+.white[
+#모델링  
+  - 시계열 모형  
+  - Decision Tree  
+  - Xgboost]
+
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### 1. 시계열 모형  
+  - 구별, 배달 음식 종류별로 구분하여 각각의 시계열 모형 추정  
+  - 시간의 흐름과 관련이 없는 gender, age, dong, hangang은 설명변수에서 제외  
+  
+#### [중국집 배달량 구별로 시계열 모형 만들기]  
+
+  1.구 이름 데이터 프레임 만들기
+
+```{r include=FALSE}
+setwd("C:\\Users\\EUNJI\\Desktop\\ds_yonsei\\프로젝트\\data\\real")
+its_eats <- read.csv("final_0606.csv",header = TRUE)      
+library(tidyverse)
+```
+
+```{r}
+gu_names <- its_eats %>%
+  select(region)
+gu_names <- unique(gu_names)
+rownames(gu_names) <- NULL
+```
+  
+  
+  2.구별로 데이터를 할당하는데 필요한 변수들 정리  
+  
+```{r}
+tsdata_chinese_names <- c()
+calls_chinese_names <- c()
+auto_names <- c()
+fit_names <- c()
+pred_names <- c()
+```
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### 1. 시계열 모형
+#### [중국집 배달량 구별로 시계열 모형 만들기] 
+
+  3.type이 중국집인 시계열 데이터를 구별로 정리  
+  
+```{r}
+for (i in 1:25) {
+  assign(paste0("tsdata_chinese_",i),
+         unique(its_eats %>%
+           filter(type == "중국집" & region == gu_names[i,1]) %>%
+           select(date, gangsu, rain, temperature, holiday.y, KBO, soccer)))
+  assign(paste0("calls_chinese_",i),
+        its_eats %>%
+           filter(type == "중국집" & region == gu_names[i,1]) %>%
+           select(date, call) %>%
+           group_by(date) %>%
+           summarise(calls = sum(call)))  
+  tsdata_chinese_names[i] <- paste0("tsdata_chinese_",i)
+  calls_chinese_names[i] <- paste0("calls_chinese_",i)
+  auto_names[i] <- paste0("auto_",i)
+  fit_names[i] <- paste0("fit_",i)
+  pred_names[i] <- paste0("pred_",i)
+  assign(paste0("tsdata_chinese_",i) ,
+         ts(left_join(get(calls_chinese_names[i]),
+                      get(tsdata_chinese_names[i]),
+                      by = "date")))}
+```
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### 1. 시계열 모형
+#### [중국집 배달량 구별로 시계열 모형 만들기] 
+
+  4.모델링  
+
+```{r warning=FALSE}
+library(forecast)
+covariate <- c("gangsu","rain","temperature","holiday.y","KBO","soccer")
+for (i in 1:25) {
+  assign(paste0("auto_",i),
+        auto.arima(get(tsdata_chinese_names[i])[,"calls"], #<<
+                    xreg = get(tsdata_chinese_names[i])[,covariate])) #<<
+  ord = get(auto_names[1])$arma[c(1,6,2)] #<<
+  assign(paste0("fit_",i), 
+         arima(get(tsdata_chinese_names[i])[,"calls"],
+               xreg = get(tsdata_chinese_names[i])[,covariate],
+               order = ord, seasonal = list(order=c(0,0,1), period =7)))} #<<
+```
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### 1. 시계열 모형
+#### [중국집 배달량 구별로 시계열 모형 만들기]  
+   
+   5. 예측과 비교 그래프 그리기 
+```{r eval=FALSE}
+for (i in 1:25) {
+  assign(paste0("pred_",i),
+         forecast(get(fit_names[i]),
+                  xreg = get(tsdata_chinese_names[i])[,covariate]))}
+par(mfrow=c(5,5))
+par(mar=c(1,1,1,1))
+for (i in 1:25) {
+  plot(get(tsdata_chinese_names[i])[,"calls"], main = gu_names[i,1])
+  lines(fitted(get(pred_names[i])), col = "skyblue")}
+```
+
+---
+[중국집 배달량]  
+
+```{r echo=FALSE}
+for (i in 1:25) {
+  assign(paste0("pred_",i),
+         forecast(get(fit_names[i]),
+                  xreg = get(tsdata_chinese_names[i])[,covariate]))}
+par(mfrow=c(5,5))
+par(mar=c(1,1,1,1))
+for (i in 1:25) {
+  plot(get(tsdata_chinese_names[i])[,"calls"], main = gu_names[i,1])
+  lines(fitted(get(pred_names[i])), col = "skyblue")}
+```
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+```{r}
+pre_chinese <- gu_names
+for (i in 1:25) {
+pre_chinese[i,2] <- caret::RMSE(get(pred_names[i])$fitted,
+                                get(tsdata_chinese_names[i])[,"calls"])
+pre_chinese[i,3] <- caret::MAE(get(pred_names[i])$fitted,
+                                get(tsdata_chinese_names[i])[,"calls"])
+colnames(pre_chinese) <- c("구","MSE","MAE")
+}
+```
+
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+   
+   
+```{r echo=FALSE}
+pre_chinese
+```
+
+---
+[치킨 배달량]  
+
+```{r echo=FALSE, warning=FALSE}
+tsdata_chicken_names <- c()
+calls_chicken_names <- c()
+auto_names <- c()
+fit_names <- c()
+pred_names <- c()
+for (i in 1:25) {
+  assign(paste0("tsdata_chicken_",i),
+         unique(its_eats %>%
+           filter(type == "치킨" & region == gu_names[i,1]) %>%
+           select(date, gangsu, rain, temperature, holiday.y, KBO, soccer)
+        ))
+  assign(paste0("calls_chicken_",i),
+        its_eats %>%
+           filter(type == "치킨" & region == gu_names[i,1]) %>%
+           select(date, call) %>%
+           group_by(date) %>%
+           summarise(calls = sum(call)))  
+  tsdata_chicken_names[i] <- paste0("tsdata_chicken_",i)
+  calls_chicken_names[i] <- paste0("calls_chicken_",i)
+  auto_names[i] <- paste0("auto_",i)
+  fit_names[i] <- paste0("fit_",i)
+  pred_names[i] <- paste0("pred_",i)
+  assign(paste0("tsdata_chicken_",i) ,
+         ts(left_join(get(calls_chicken_names[i]), get(tsdata_chicken_names[i]), by = "date")))
+}
+
+## 모델링 loop
+library(forecast)
+covariate <- c("gangsu","rain","temperature","holiday.y","KBO","soccer")
+for (i in 1:25) {
+  assign(paste0("auto_",i),
+         auto.arima(get(tsdata_chicken_names[i])[,"calls"],
+                    xreg = get(tsdata_chicken_names[i])[,covariate]))
+  ord = get(auto_names[1])$arma[c(1,6,2)]
+  assign(paste0("fit_",i), 
+         arima(get(tsdata_chicken_names[i])[,"calls"],
+               xreg = get(tsdata_chicken_names[i])[,covariate],
+               order = ord, seasonal = list(order=c(0,0,1), period =7)))
+}
+
+# 예측
+for (i in 1:25) {
+  assign(paste0("pred_",i),
+         forecast(get(fit_names[i]), xreg = get(tsdata_chicken_names[i])[,covariate]))
+}
+par(mfrow=c(5,5))
+par(mar=c(1,1,1,1))
+for (i in 1:25) {
+  plot(get(tsdata_chicken_names[i])[,"calls"], main = gu_names[i,1])
+  lines(fitted(get(pred_names[i])), col = "pink")
+  }
+```
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+```{r echo=FALSE}
+pre_chicken <- gu_names
+for (i in 1:25) {
+pre_chicken[i,2] <- caret::RMSE(get(pred_names[i])$fitted,
+                                get(tsdata_chicken_names[i])[,"calls"])
+pre_chicken[i,3] <- caret::MAE(get(pred_names[i])$fitted,
+                                get(tsdata_chicken_names[i])[,"calls"])
+}
+colnames(pre_chicken) <- c("구","MSE","MAE")
+pre_chicken
+```
+
+---
+[피자 배달량]  
+
+```{r echo=FALSE, warning=FALSE}
+tsdata_pizza_names <- c()
+calls_pizza_names <- c()
+auto_names <- c()
+fit_names <- c()
+pred_names <- c()
+for (i in 1:25) {
+  assign(paste0("tsdata_pizza_",i),
+         unique(its_eats %>%
+           filter(type == "피자" & region == gu_names[i,1]) %>%
+           select(date, gangsu, rain, temperature, holiday.y, KBO, soccer)
+        ))
+  assign(paste0("calls_pizza_",i),
+        its_eats %>%
+           filter(type == "피자" & region == gu_names[i,1]) %>%
+           select(date, call) %>%
+           group_by(date) %>%
+           summarise(calls = sum(call)))  
+  tsdata_pizza_names[i] <- paste0("tsdata_pizza_",i)
+  calls_pizza_names[i] <- paste0("calls_pizza_",i)
+  auto_names[i] <- paste0("auto_",i)
+  fit_names[i] <- paste0("fit_",i)
+  pred_names[i] <- paste0("pred_",i)
+  assign(paste0("tsdata_pizza_",i) ,
+         ts(left_join(get(calls_pizza_names[i]), get(tsdata_pizza_names[i]), by = "date")))
+}
+
+## 모델링 loop
+library(forecast)
+covariate <- c("gangsu","rain","temperature","holiday.y","KBO","soccer")
+for (i in 1:25) {
+  assign(paste0("auto_",i),
+         auto.arima(get(tsdata_pizza_names[i])[,"calls"],
+                    xreg = get(tsdata_pizza_names[i])[,covariate]))
+  ord = get(auto_names[1])$arma[c(1,6,2)]
+  assign(paste0("fit_",i), 
+         arima(get(tsdata_pizza_names[i])[,"calls"],
+               xreg = get(tsdata_pizza_names[i])[,covariate],
+               order = ord, seasonal = list(order=c(0,0,1), period =7)))
+}
+
+# 예측
+for (i in 1:25) {
+  assign(paste0("pred_",i),
+         forecast(get(fit_names[i]), xreg = get(tsdata_pizza_names[i])[,covariate]))
+}
+par(mfrow=c(5,5))
+par(mar=c(1,1,1,1))
+for (i in 1:25) {
+  plot(get(tsdata_pizza_names[i])[,"calls"], main = gu_names[i,1])
+  lines(fitted(get(pred_names[i])), col = "light green")
+  }
+```
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+```{r echo=FALSE}
+pre_pizza <- gu_names
+for (i in 1:25) {
+pre_pizza[i,2] <- caret::RMSE(get(pred_names[i])$fitted,
+                                get(tsdata_pizza_names[i])[,"calls"])
+pre_pizza[i,3] <- caret::MAE(get(pred_names[i])$fitted,
+                                get(tsdata_pizza_names[i])[,"calls"])}
+colnames(pre_pizza) <- c("구","MSE","MAE")
+pre_pizza
+```
+
+---
+###2. Decision Tree  
+[중국집]  
+
+```{r echo=FALSE}
+setwd("C:\\Users\\EUNJI\\Desktop\\ds_yonsei\\프로젝트\\data\\real")
+data_0618=read.csv("final_0618.csv",head=TRUE)
+set.seed(100)
+data_0618_CHN<-subset(data_0618, type=="중국집",sort=F)
+sample_data <- sample(nrow(data_0618_CHN),nrow(data_0618_CHN)*0.6)
+train <- data_0618_CHN[sample_data,]
+test <- data_0618_CHN[-sample_data,]
+
+library(rpart)
+
+fit2 <- rpart(train$call~ day + gender + age + month + hangang + gangsu +
+                          rain + temperature + holiday + KBO +soccer +
+                          longitude + latitude,
+                          data = train, method = "anova",
+                          control = rpart.control(cp = 0.01,minsplit = 100))
+par(mfrow=c(1,1))
+plot(fit2, uniform=TRUE, 
+     main="Regression Tree")
+text(fit2, use.n=TRUE, cex = .6)
+```
+
+---
+  
+```{R echo=FALSE}  
+plotcp(fit2)
+```
+
+
+```{r include=FALSE}
+pred_d1 <- predict(fit2, test)
+MAE_D1 <- caret::MAE(pred_d1,test$call)
+MSE_D1 <- caret::RMSE(pred_d1,test$call)
+```
+
+---
+###3. Desicion Tree
+[치킨]  
+
+```{r echo=FALSE}
+set.seed(100)
+data_0618_CHI<-subset(data_0618, type=="치킨",sort=F)
+sample_data <- sample(nrow(data_0618_CHI),nrow(data_0618_CHI)*0.6)
+train <- data_0618_CHI[sample_data,]
+test <- data_0618_CHI[-sample_data,]
+
+library(rpart)
+
+fit3 <- rpart(train$call~ day + gender + age + month + hangang + gangsu +
+                rain + temperature + holiday + KBO +soccer +
+                longitude + latitude,
+              data = train, method = "anova",
+              control = rpart.control(cp = 0.01,minsplit = 100))
+par(mfrow=c(1,1))
+plot(fit3, uniform=TRUE, 
+     main="Regression Tree")
+text(fit3, use.n=TRUE, cex = .6)
+```
+
+---
+  
+```{R echo=FALSE}  
+plotcp(fit3)
+```
+
+
+```{r include=FALSE}
+pred_d2 <- predict(fit3, test)
+MAE_D2 <- caret::MAE(pred_d2,test$call)
+MSE_D2 <- caret::RMSE(pred_d2,test$call)
+```
+
+---
+### 3. Decision Tree
+[피자]  
+
+```{r echo=FALSE}
+set.seed(100)
+data_0618_PIZ<-subset(data_0618, type=="피자",sort=F)
+sample_data <- sample(nrow(data_0618_PIZ),nrow(data_0618_PIZ)*0.6)
+train <- data_0618_PIZ[sample_data,]
+test <- data_0618_PIZ[-sample_data,]
+
+library(rpart)
+
+fit4 <- rpart(train$call~ day + gender + age + month + hangang + gangsu +
+                rain + temperature + holiday + KBO +soccer +
+                longitude + latitude,
+              data = train, method = "anova",
+              control = rpart.control(cp = 0.01,minsplit = 100))
+par(mfrow=c(1,1))
+plot(fit4, uniform=TRUE, 
+     main="Regression Tree")
+text(fit4, use.n=TRUE, cex = .6)
+```
+
+---
+  
+```{R echo=FALSE}  
+plotcp(fit4)
+```
+
+```{r echo=FALSE}
+pred_d3 <- predict(fit4, test)
+MAE_D3 <- caret::MAE(pred_d3,test$call)
+MSE_D3 <- caret::RMSE(pred_d3,test$call)
+```
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### 3-1. XGboost (위도, 경도 적용)  
+#### [ 중국집 배달 건수를 모델링 ]  
+1. test, train set 나누기
+```{r include=FALSE}
+library(tidyverse)
+```
+
+```{r}
+setwd("C:\\Users\\EUNJI\\Desktop\\ds_yonsei\\프로젝트\\data\\real")
+data <- read.csv("final_0618.csv")
+data_chinese <- data %>% filter(type=="중국집")
+idx_chinese <- sample(1:nrow(data_chinese),nrow(data_chinese)*0.7)
+train.df_chinese <- data_chinese[idx_chinese,]
+test.df_chinese <- data_chinese[-idx_chinese,]
+```
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### 3-1. XGboost (위도, 경도 적용)  
+#### [ 중국집 배달 건수를 모델링 ]  
+2. sparse matrix (원핫인코딩)
+```{r include=FALSE}
+library(Matrix)    
+```
+
+```{R}
+sparse_matrix_train_chinese <- sparse.model.matrix(call ~ -1+day+gender+age+month+
+                                                     longitude+latitude+gangsu+rain+
+                                                     temperature+holiday+KBO+soccer,
+                                                   data = train.df_chinese)
+sparse_matrix_test_chinese  <- sparse.model.matrix(call ~ -1+day+gender+age+month+
+                                                     longitude+latitude+gangsu+rain+
+                                                     temperature+holiday+KBO+soccer,
+                                                   data =  test.df_chinese)
+output_vector_chinese = train.df_chinese[,"call"]
+obs_chinese <- test.df_chinese[,"call"]
+```
+
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### 3-1. XGboost (위도, 경도 적용)  
+#### [ 중국집 배달 건수를 모델링 ]  
+3. 모델링
+```{r include=FALSE}
+library(xgboost)
+```
+
+```{r}
+set.seed(2013101041)
+xgb_chinese <- xgboost(data = sparse_matrix_train_chinese,
+                       label = output_vector_chinese,
+                       max_depth = 6, eta = 0.3, nthread = 3, nrounds = 500,
+                       objective = "count:poisson")
+
+```
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+# Variable Importance Plot
+```{R}
+importance_chinese <- xgb.importance(feature_names = colnames(sparse_matrix_train_chinese),
+                                     model = xgb_chinese)
+head(importance_chinese)
+```
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+```{R}
+xgb.plot.importance(importance_matrix = importance_chinese,
+                    top_n=15)
+```
+
+---
+
+### 3-1. XGboost (위도, 경도 적용)  
+#### [ 치킨 배달 건수를 모델링 ]  
+1. test, train set 나누기
+```{r}
+data_chicken <- data %>% filter(type=="치킨")
+idx_chicken <- sample(1:nrow(data_chicken),nrow(data_chicken)*0.7)
+train.df_chicken <- data_chicken[idx_chicken,]
+test.df_chicken <- data_chicken[-idx_chicken,]
+```
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### 3-1. XGboost (위도, 경도 적용)  
+#### [ 치킨 배달 건수를 모델링 ]  
+2. sparse matrix (원핫인코딩)
+```{r}
+sparse_matrix_train_chicken <- sparse.model.matrix(call ~ -1+day+gender+age+month+
+                                                     longitude+latitude+gangsu+rain+
+                                                     temperature+holiday+KBO+soccer,
+                                                   data = train.df_chicken)
+sparse_matrix_test_chicken  <- sparse.model.matrix(call ~ -1+day+gender+age+month+
+                                                     longitude+latitude+gangsu+rain+
+                                                     temperature+holiday+KBO+soccer,
+                                                   data =  test.df_chicken)
+output_vector_chicken = train.df_chicken[,"call"]
+obs_chicken <- test.df_chicken[,"call"]
+```
+
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### 3-1. XGboost (위도, 경도 적용)  
+#### [ 치킨 배달 건수를 모델링 ]  
+3. 모델링
+```{r}
+set.seed(2013101041)
+xgb_chicken <- xgboost(data = sparse_matrix_train_chicken,
+                       label = output_vector_chicken,
+                       max_depth = 6, eta = 0.3, nthread = 3, nrounds = 500,
+                       objective = "count:poisson")
+
+```
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+# Variable Importance Plot
+```{R}
+importance_chicken <- xgb.importance(feature_names = colnames(sparse_matrix_train_chicken),
+                                     model = xgb_chicken)
+head(importance_chicken)
+```
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+```{R}
+xgb.plot.importance(importance_matrix = importance_chicken,
+                    top_n=15)
+```
+
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### 3-1. XGboost (위도, 경도 적용)  
+#### [ 피자 배달 건수를 모델링 ]  
+1. test, train set 나누기
+```{r}
+data_pizza <- data %>% filter(type=="피자")
+idx_pizza <- sample(1:nrow(data_pizza),nrow(data_pizza)*0.7)
+train.df_pizza <- data_pizza[idx_pizza,]
+test.df_pizza <- data_pizza[-idx_pizza,]
+```
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### 3-1. XGboost (위도, 경도 적용)  
+#### [ 중국집 배달 건수를 모델링 ]  
+2. sparse matrix (원핫인코딩)
+```{r}
+sparse_matrix_train_pizza <- sparse.model.matrix(call ~ -1+day+gender+age+month+
+                                                     longitude+latitude+gangsu+rain+
+                                                     temperature+holiday+KBO+soccer,
+                                                   data = train.df_pizza)
+sparse_matrix_test_pizza  <- sparse.model.matrix(call ~ -1+day+gender+age+month+
+                                                     longitude+latitude+gangsu+rain+
+                                                     temperature+holiday+KBO+soccer,
+                                                   data =  test.df_pizza)
+output_vector_pizza = train.df_pizza[,"call"]
+obs_pizza <- test.df_pizza[,"call"]
+```
+
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### 3-1. XGboost (위도, 경도 적용)  
+#### [ 중국집 배달 건수를 모델링 ]  
+3. 모델링
+```{r}
+xgb_pizza <- xgboost(data = sparse_matrix_train_pizza,
+                       label = output_vector_pizza,
+                       max_depth = 6, eta = 0.3, nthread = 3, nrounds = 500,
+                       objective = "count:poisson")
+
+```
+
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+# Variable Importance Plot
+```{R}
+importance_pizza <- xgb.importance(feature_names = colnames(sparse_matrix_train_pizza),
+                                     model = xgb_pizza)
+head(importance_pizza)
+```
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+```{R}
+xgb.plot.importance(importance_matrix = importance_pizza,
+                    top_n=15)
+```
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+###시계열 MSE, MAE  
+[중국집] 
+
+```{R echo = FALSE}
+pre_chinese
+```
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+[치킨]  
+
+```{R echo = FALSE}
+pre_chicken
+```
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+[피자]  
+
+```{R echo = FALSE}
+pre_pizza
+```
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+## Decision Tree MSE, MAE
+
+```{R}
+c(MSE_D1, MAE_D1)  # 중국집
+c(MSE_D2, MAE_D2)  # 치킨
+c(MSE_D3, MAE_D3)  # 피자
+```
+
+---
+background-image: url(Picture2.png)
+background-position: center
+background-size: contain
+
+### 3. XGboost MSE, MAE
+[중국집]
+```{r}
+pred_chinese <- predict(xgb_chinese,sparse_matrix_test_chinese)
+caret::MAE(pred_chinese,obs_chinese)
+caret::RMSE(pred_chinese,obs_chinese)
+```
+
+[치킨]
+```{r}
+pred_chicken <- predict(xgb_chicken,sparse_matrix_test_chicken)
+caret::MAE(pred_chicken,obs_chicken)
+caret::RMSE(pred_chicken,obs_chicken)
+```
+
+---
+
+[피자]
+```{r}
+pred_pizza <- predict(xgb_pizza,sparse_matrix_test_pizza)
+caret::MAE(pred_pizza,obs_pizza)
+caret::RMSE(pred_pizza,obs_pizza)
+```
